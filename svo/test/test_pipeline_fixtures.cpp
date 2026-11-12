@@ -14,6 +14,11 @@
 #include <vikit/cameras/camera_factory.h>
 #include <vikit/cameras/ncamera.h>
 #include <opencv2/imgproc.hpp>
+#include <opencv2/imgcodecs.hpp>
+#include <yaml-cpp/yaml.h>
+#include <filesystem>
+#include <fstream>
+#include <iomanip>
 #include <Eigen/Geometry>
 #include <algorithm>
 #include <cmath>
@@ -146,6 +151,109 @@ svo::Transformation bodyPose(int frame)
       Eigen::Vector3d(.045*time,.008*std::sin(.3*time),.002*time));
 }
 
+// Optional integration artifact; no files are written unless explicitly requested.
+// The original four-camera format is nanoseconds followed by four image paths.
+void exportArrayFixture(const Rig& rig, const TexturedScene& scene)
+{
+  const char* destination = std::getenv("SVO_FIXTURE_EXPORT_DIR");
+  if (!destination || !*destination) return;
+  const auto root = std::filesystem::absolute(destination);
+  std::filesystem::create_directories(root/"data");
+  const auto manifest_path = root/"data/images.txt";
+  if (std::filesystem::exists(manifest_path))
+    throw std::runtime_error("Refusing to overwrite an existing fixture export: " + root.string());
+  std::ofstream manifest(manifest_path), groundtruth(root/"trajectory_gt_imu.txt");
+  if (!manifest || !groundtruth) throw std::runtime_error("Cannot create array fixture export");
+  manifest << "# timestamp_ns cam0 cam1 cam2 cam3\n";
+  groundtruth << std::fixed << std::setprecision(12);
+  for (int frame = 0; frame < kFrames; ++frame)
+  {
+    const int64_t stamp = 1000000000LL+50000000LL*frame;
+    manifest << stamp;
+    for (size_t camera = 0; camera < 4; ++camera)
+    {
+      const auto directory = "cam"+std::to_string(camera);
+      std::filesystem::create_directories(root/"data"/directory);
+      const auto name = directory+"/"+std::to_string(stamp)+".png";
+      if (!cv::imwrite((root/"data"/name).string(),scene.render(bodyPose(frame)*rig.body_camera[camera])))
+        throw std::runtime_error("Cannot export array fixture image: " + name);
+      manifest << ' ' << name;
+    }
+    manifest << '\n';
+    const auto pose = bodyPose(frame);
+    const auto position = pose.getPosition();
+    const auto quaternion = pose.getRotation().toImplementation();
+    groundtruth << stamp*1e-9 << ' ' << position.x() << ' ' << position.y() << ' ' << position.z()
+                << ' ' << quaternion.x() << ' ' << quaternion.y() << ' ' << quaternion.z() << ' ' << quaternion.w() << '\n';
+  }
+  YAML::Node calibration;
+  calibration["label"] = "deterministic_four_camera_geometry_fixture";
+  for (size_t camera = 0; camera < 4; ++camera)
+  {
+    YAML::Node entry, model;
+    model["label"] = "cam"+std::to_string(camera);
+    model["image_width"] = kWidth; model["image_height"] = kHeight;
+    model["line-delay-nanoseconds"] = 0; model["type"] = "pinhole";
+    model["intrinsics"]["cols"] = 1; model["intrinsics"]["rows"] = 4;
+    model["intrinsics"]["data"] = std::vector<double>{kFocal,kFocal,kWidth/2.0,kHeight/2.0};
+    model["distortion"]["type"] = "none";
+    model["distortion"]["parameters"]["cols"] = 1;
+    model["distortion"]["parameters"]["rows"] = 0;
+    model["distortion"]["parameters"]["data"] = std::vector<double>{};
+    entry["camera"] = model;
+    entry["T_B_C"]["cols"] = 4; entry["T_B_C"]["rows"] = 4;
+    std::vector<double> matrix;
+    const auto transform = rig.body_camera[camera].getTransformationMatrix();
+    for (int row = 0; row < 4; ++row)
+      for (int column = 0; column < 4; ++column) matrix.push_back(transform(row,column));
+    entry["T_B_C"]["data"] = matrix;
+    calibration["cameras"].push_back(entry);
+  }
+  std::ofstream calibration_file(root/"calib.yaml"), parameter_file(root/"params.yaml");
+  if (!calibration_file || !parameter_file) throw std::runtime_error("Cannot export fixture configuration");
+  calibration_file << calibration;
+  // Keep decimal spelling for integral-valued double parameters: the ROS2
+  // parameter parser distinguishes YAML integers from floating-point overrides.
+  parameter_file << "\"/**\":\n  ros__parameters:\n"
+                 << "    dataset_directory: " << std::quoted(root.string()) << '\n'
+                 << "    calib_file: " << std::quoted((root/"calib.yaml").string()) << '\n'
+                 << "    output_dir: " << std::quoted((root/"results").string()) << '\n'
+                 << R"(    dataset_is_array: true
+    dataset_is_stereo: false
+    use_imu: false
+    use_ceres_backend: false
+    runlc: false
+    use_global_map: false
+    trace_statistics: false
+    use_threaded_depthfilter: false
+    max_n_kfs: 20
+    map_scale: 5.0
+    img_align_max_level: 3
+    img_align_min_level: 0
+    quality_min_fts: 20
+    quality_max_drop_fts: 1000
+    kfselect_criterion: DOWNLOOKING
+    kfselect_min_dist: 0.035
+    grid_size: 20
+    n_pyr_levels: 3
+    use_edgelets: false
+    max_fts: 240
+    max_seeds_ratio: 1.0
+    max_map_fts: 200
+    klt_max_level: 3
+    init_min_features: 60
+    init_min_tracked: 40
+    init_min_inliers: 30
+    init_min_disparity: 25.0
+    init_min_features_factor: 2.5
+)";
+  std::ofstream description(root/"FORMAT.txt");
+  description << "24 frames, 50ms spacing. data/images.txt: timestamp_ns + four independent image paths.\n"
+              << "calib.yaml contains metric camera-to-body T_B_C. params.yaml selects the actual array benchmark.\n"
+              << "No IMU, pose prior, or prebuilt map is supplied. trajectory_gt_imu.txt is exact synthetic reference.\n"
+              << "The offline factory keeps its historical 25px initialization disparity; the direct fixture uses 12px.\n";
+}
+
 enum class Pipeline { Mono, Stereo, Array };
 
 void exercisePipeline(Pipeline pipeline)
@@ -155,6 +263,7 @@ void exercisePipeline(Pipeline pipeline)
   const size_t count = pipeline == Pipeline::Mono ? 1 : (pipeline == Pipeline::Stereo ? 2 : 4);
   const Rig rig = makeRig(count);
   TexturedScene scene;
+  if (pipeline == Pipeline::Array) exportArrayFixture(rig,scene);
   svo::BaseOptions base;
   // Test-local settings: small, synchronous, noise-free scene. Production
   // defaults are untouched; no supplied poses, map points or IMU priors are used.

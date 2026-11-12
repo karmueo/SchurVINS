@@ -4,6 +4,13 @@
 #include <string>
 #include <algorithm>
 #include <iostream>
+#include <fstream>
+#include <sstream>
+#include <iomanip>
+#include <cmath>
+#include <unistd.h>
+#include <yaml-cpp/yaml.h>
+#include <sys/resource.h>
 #include <glog/logging.h>
 #include <gflags/gflags.h>
 #include <rclcpp/rclcpp.hpp>
@@ -62,6 +69,8 @@ class BenchmarkNode : public SvoInterface
 public:
   BenchmarkNode(const PipelineType& type, rclcpp::Node& nh,
                 rclcpp::Node& pnh);
+  ~BenchmarkNode() override;
+  void finish();
 
   // general evaluation functions: general dataset
   void runBenchmark(const std::string& dataset_dir);
@@ -98,6 +107,15 @@ public:
   void runArrayBenchmark(const std::string& dataset_dir);
 
 private:
+  void processOfflineFrame(const std::vector<cv::Mat>& images, int64_t stamp, size_t id);
+  void saveConfiguration();
+  void writeSummary();
+  std::ofstream frame_stats_;
+  uint64_t processed_ = 0, tracking_frames_ = 0, resets_ = 0, input_records_ = 0;
+  int64_t last_stamp_ = -1, first_stamp_ = -1, first_tracking_stamp_ = -1;
+  bool complete_ = false;
+  std::vector<double> processing_ms_;
+  std::chrono::steady_clock::time_point started_ = std::chrono::steady_clock::now();
   // common stuff
   int frame_count_ = 0;
   std::ofstream trace_est_pose_;
@@ -170,6 +188,88 @@ BenchmarkNode::BenchmarkNode(const PipelineType& type,
       static_cast<size_t>(vk::param<int>(pnh_, "blackout_first_id", 0));
   blackout_end_id_ =
       static_cast<size_t>(vk::param<int>(pnh_, "blackout_last_id", 0));
+  safeCreateTrace("frames.csv", &frame_stats_);
+  frame_stats_ << "id,timestamp_ns,status,tracking_quality,keyframes,pose_available,processing_ms\n";
+  saveConfiguration();
+  RCLCPP_INFO(pnh_.get_logger(), "Offline output directory: %s", svo_->options_.trace_dir.c_str());
+
+}
+
+BenchmarkNode::~BenchmarkNode()
+{
+  try { writeSummary(); }
+  catch (const std::exception& error) { RCLCPP_ERROR(pnh_.get_logger(), "Cannot write offline summary: %s", error.what()); }
+}
+
+void BenchmarkNode::saveConfiguration()
+{
+  YAML::Node root;
+  auto parameters = root[pnh_.get_fully_qualified_name()]["ros__parameters"];
+  for (const auto& name : pnh_.list_parameters({}, 100).names)
+  {
+    const auto parameter = pnh_.get_parameter(name);
+    if (parameter.get_type() == rclcpp::ParameterType::PARAMETER_STRING) parameters[name] = parameter.as_string();
+    else parameters[name] = YAML::Load(parameter.value_to_string());
+  }
+  parameters["trace_dir"] = svo_->options_.trace_dir;
+  std::ofstream config(svo_->options_.trace_dir + "/effective_config.yaml");
+  if (!config) throw std::runtime_error("Cannot create effective_config.yaml");
+  config << root;
+}
+
+void BenchmarkNode::processOfflineFrame(const std::vector<cv::Mat>& images, int64_t stamp, size_t id)
+{
+  if (stamp < 0 || stamp <= last_stamp_) throw std::runtime_error("Offline image timestamps must increase strictly");
+  if (images.size() != ncam_->numCameras()) throw std::runtime_error("Offline camera count mismatch");
+  for (const auto& image : images) if (image.empty()) throw std::runtime_error("Empty offline image");
+  const auto begin = std::chrono::steady_clock::now();
+  setImuPrior(stamp);
+  processImageBundle(images,stamp);
+  const auto frames = svo_->getLastFrames();
+  if (!frames || frames->getMinTimestampNanoseconds() != stamp)
+    throw std::runtime_error("Estimator did not accept the offline image bundle");
+  const bool tracked = svo_->stage() == Stage::kTracking;
+  if (tracked && !frames->get_T_W_B().getTransformationMatrix().allFinite())
+    throw std::runtime_error("Non-finite offline estimated pose");
+  publishResults(images,stamp); // Also emits the standard TUM IMU trajectory.
+  const double elapsed = std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-begin).count();
+  if (first_stamp_ < 0) first_stamp_ = stamp;
+  last_stamp_ = stamp; ++processed_; processing_ms_.push_back(elapsed);
+  if (tracked) { ++tracking_frames_; if (first_tracking_stamp_ < 0) first_tracking_stamp_ = stamp; }
+  traceStatus(id, stamp*1e-9);
+  frame_stats_ << id << ',' << stamp << ',' << svo_->stageStr() << ',' << svo_->trackingQualityStr()
+               << ',' << svo_->map()->numKeyframes() << ',' << tracked << ',' << elapsed << '\n';
+}
+
+void BenchmarkNode::writeSummary()
+{
+  frame_stats_.flush(); trace_status_.flush(); trace_est_pose_.flush(); trace_marked_est_pose_.flush();
+  if (!frame_stats_ || !trace_status_ || !trace_est_pose_ || !trace_marked_est_pose_)
+    throw std::runtime_error("Failed writing offline frame or trajectory records");
+  auto sorted = processing_ms_; std::sort(sorted.begin(),sorted.end());
+  auto quantile = [&](double q) { return sorted.empty() ? 0.0 : sorted[static_cast<size_t>(q*(sorted.size()-1))]; };
+  struct rusage usage {}; getrusage(RUSAGE_SELF,&usage);
+  std::ofstream summary(svo_->options_.trace_dir + "/summary.json");
+  if (!summary) throw std::runtime_error("Cannot create offline summary.json");
+  summary << "{\"complete\":" << (complete_ ? "true" : "false") << ",\"input_records\":" << input_records_
+          << ",\"processed\":" << processed_ << ",\"tracking_frames\":" << tracking_frames_
+          << ",\"trajectory_coverage\":" << (processed_ ? static_cast<double>(tracking_frames_)/processed_ : 0.0)
+          << ",\"resets\":" << resets_ << ",\"first_timestamp_ns\":" << first_stamp_
+          << ",\"last_timestamp_ns\":" << last_stamp_ << ",\"initialization_seconds\":"
+          << (first_tracking_stamp_ < 0 ? -1.0 : (first_tracking_stamp_-first_stamp_)*1e-9)
+          << ",\"processing_ms_p50\":" << quantile(.5) << ",\"processing_ms_p95\":" << quantile(.95)
+          << ",\"processing_ms_p99\":" << quantile(.99) << ",\"elapsed_seconds\":"
+          << std::chrono::duration<double>(std::chrono::steady_clock::now()-started_).count()
+          << ",\"peak_rss_kb\":" << usage.ru_maxrss << ",\"final_stage\":" << std::quoted(svo_->stageStr()) << "}\n";
+}
+
+void BenchmarkNode::finish()
+{
+  if (!rclcpp::ok()) throw std::runtime_error("Offline benchmark interrupted before completion");
+  if (!processed_) throw std::runtime_error("Offline benchmark processed no image bundles");
+  if (!tracking_frames_) throw std::runtime_error("Offline benchmark never entered tracking");
+  saveConfiguration(); complete_ = true;
+  try { writeSummary(); } catch (...) { complete_ = false; throw; }
 }
 
 void BenchmarkNode::safeCreateTrace(const std::string& trace_fn,
@@ -180,7 +280,7 @@ void BenchmarkNode::safeCreateTrace(const std::string& trace_fn,
   fs->open(full_fn.c_str());
   if (fs->fail())
   {
-    LOG(FATAL) << "Fail to create trace " << full_fn;
+    throw std::runtime_error("Failed to create trace " + full_fn);
   }
   else
   {
@@ -239,41 +339,30 @@ bool BenchmarkNode::loadNextImages(const std::string& dataset_basedir,
   CHECK_NOTNULL(img_id);
   images->clear();
 
-  if (img_fs.peek() == '#' || img_fs.peek() == '\n')  // skip and empty line
+  std::string line;
+  while (std::getline(img_fs,line))
   {
-    img_fs.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
-  }
-
-  // load image
-  img_fs >> *img_id >> *stamp_sec;
-  if ((*img_id < first_frame_id_) ||
-      (last_frame_id_ > 0 && *img_id >= last_frame_id_) || img_fs.eof())
-  {
-    img_fs.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
-    return false;
-  }
-
-  size_t n_img = svo_->cams_->numCameras();
-  for (size_t i = 0; i < n_img; i++)
-  {
-    std::string img_name;
-    img_fs >> img_name;
-    std::string img_filename(dataset_basedir + "/data/" + img_name);
-    cv::Mat img(cv::imread(img_filename, 0));
-    if (img.empty())
+    const auto start = line.find_first_not_of(" \t\r");
+    if (start == std::string::npos || line[start] == '#') continue;
+    std::istringstream row(line);
+    if (!(row >> *img_id >> *stamp_sec) || !std::isfinite(*stamp_sec) || *stamp_sec < 0)
+      throw std::runtime_error("Malformed offline image-list id/timestamp: " + line);
+    ++input_records_;
+    std::vector<std::string> paths(ncam_->numCameras());
+    for (auto& path : paths) if (!(row >> path)) throw std::runtime_error("Missing camera path in image list: " + line);
+    if (*img_id < first_frame_id_ || (last_frame_id_ > 0 && *img_id >= last_frame_id_)) continue;
+    for (const auto& path : paths)
     {
-      LOG(ERROR) << "Reading image " << img_filename << " failed. ";
+      const auto filename = (std::filesystem::path(dataset_basedir)/"data"/path).string();
+      auto image = cv::imread(filename,cv::IMREAD_GRAYSCALE);
+      if (image.empty()) throw std::runtime_error("Cannot read offline image: " + filename);
+      if (*img_id > blackout_start_id_ && *img_id < blackout_end_id_) image.setTo(cv::Scalar(0));
+      images->push_back(std::move(image));
     }
-
-    if (*img_id > blackout_start_id_ && *img_id < blackout_end_id_)
-    {
-      img.setTo(cv::Scalar(0));
-    }
-
-    images->push_back(img);
+    return true;
   }
-  img_fs.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
-  return true;
+  if (img_fs.bad()) throw std::runtime_error("Failed reading offline image list");
+  return false;
 }
 
 void BenchmarkNode::runBenchmark(const std::string& dataset_dir)
@@ -285,9 +374,7 @@ void BenchmarkNode::runBenchmark(const std::string& dataset_dir)
   {
     std::string imu_filename(dataset_dir + "/data/imu.txt");
     if (!imu_handler_->loadImuMeasurementsFromFile(imu_filename))
-    {
-      return;
-    }
+      throw std::runtime_error("Cannot read offline IMU measurements: " + imu_filename);
   }
 
   // Load images.
@@ -295,8 +382,7 @@ void BenchmarkNode::runBenchmark(const std::string& dataset_dir)
   std::ifstream img_fs(img_filename.c_str());
   if (!img_fs.is_open())
   {
-    SVO_ERROR_STREAM("Could not open images file " << img_filename);
-    return;
+    throw std::runtime_error("Cannot open offline image list: " + img_filename);
   }
 
   while (img_fs.good() && !img_fs.eof() && rclcpp::ok())
@@ -312,9 +398,7 @@ void BenchmarkNode::runBenchmark(const std::string& dataset_dir)
     int64_t stamp_nanoseconds = static_cast<int64_t>(stamp_seconds * 1e9);
 
     // add image to VO
-    setImuPrior(stamp_nanoseconds);
-    processImageBundle(images, stamp_nanoseconds);
-    publishResults(images, stamp_nanoseconds);
+    processOfflineFrame(images,stamp_nanoseconds,img_id);
 
     if (svo_->stage() == Stage::kTracking || svo_->getBundleAdjuster())
     {
@@ -360,12 +444,10 @@ void BenchmarkNode::runBenchmark(const std::string& dataset_dir)
         }
       }
     }
-    traceStatus(img_id, stamp_seconds);
-
     // restart if it fails!
     if (svo_->stage() == Stage::kPaused && FLAGS_benchmark_auto_restart)
     {
-      svo_->start();
+      svo_->start(); ++resets_;
     }
 
     usleep(sleep_us_);
@@ -591,12 +673,11 @@ void BenchmarkNode::runBlenderBenchmark(const std::string& dataset_dir,
   }
   else
   {
-    SVO_ERROR_STREAM("Could not load first frame");
-    return;
+    throw std::runtime_error("Cannot load the first Blender frame");
   }
 
   // process next frames
-  frame_count_ = 1;
+  frame_count_ = 1; ++input_records_;
   FramePtr cur_frame;
   while (dataset.getNextFrame(n_pyr_levels, cur_frame, nullptr) && rclcpp::ok())
   {
@@ -605,13 +686,12 @@ void BenchmarkNode::runBlenderBenchmark(const std::string& dataset_dir,
     ++frame_count_;
     SVO_DEBUG_STREAM("Processing image " << frame_count_ << ".");
 
-    processImageBundle({ cur_frame->img() }, cur_frame->id());
-    publishResults({ cur_frame->img() }, rclcpp::Clock().now().nanoseconds());
+    ++input_records_;
+    processOfflineFrame({cur_frame->img()},cur_frame->getTimestampNSec(),static_cast<size_t>(cur_frame->id()));
 
     if (svo_->stage() != Stage::kTracking)
     {
-      SVO_ERROR_STREAM("SVO failed before entire dataset could be processed.");
-      break;
+      throw std::runtime_error("SVO failed before the entire Blender dataset was processed");
     }
 
     if (frame_count_ == 50)
@@ -638,84 +718,59 @@ void BenchmarkNode::runKittiBenchmark(const std::string& dataset_dir)
   VLOG(1) << "Run Kitti Benchmark";
   std::string dataset(dataset_dir + "/data/images.txt");
   std::ifstream dataset_fs(dataset.c_str());
-  if (!dataset_fs.is_open())
-  {
-    std::cout << "Could not open images file: " << dataset << std::endl;
-    return;
-  }
+  if (!dataset_fs.is_open()) throw std::runtime_error("Cannot open KITTI image list: " + dataset);
   std::cout << "cam0 label = " << svo_->cams_->getCamera(0).getLabel()
             << std::endl;
   std::cout << "cam1 label = " << svo_->cams_->getCamera(1).getLabel()
             << std::endl;
 
   // process dataset
-  while (dataset_fs.good() && !dataset_fs.eof() && rclcpp::ok())
+  while (dataset_fs.good() && rclcpp::ok())
   {
-    // skip comments
-    if (dataset_fs.peek() == '#')
-      dataset_fs.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
-
-    // load data
-    uint64_t id;
-    double stamp;
-    std::string img_l_name, img_r_name;
-    dataset_fs >> id >> stamp >> img_l_name >> img_r_name;
-    cv::Mat img_l_8uC1(cv::imread(dataset_dir + "/data/" + img_l_name, 0));
-    cv::Mat img_r_8uC1(cv::imread(dataset_dir + "/data/" + img_r_name, 0));
-    if (img_l_8uC1.empty() || img_r_8uC1.empty())
-    {
-      SVO_ERROR_STREAM("Reading image failed: " << img_l_name);
-      return;
-    }
-    processImageBundle({ img_l_8uC1, img_r_8uC1 }, id);
-    publishResults({ img_l_8uC1, img_r_8uC1 }, rclcpp::Clock().now().nanoseconds());
-    if (svo_->getLastFrames())
-      tracePoseKitti(svo_->getLastFrames()->at(0)->T_world_cam());
+    size_t id = 0; double stamp = 0; std::vector<cv::Mat> images;
+    if (!loadNextImages(dataset_dir,dataset_fs,&stamp,&id,&images)) break;
+    processOfflineFrame(images,static_cast<int64_t>(stamp*1e9),id);
+    tracePoseKitti(svo_->getLastFrames()->at(0)->T_world_cam());
   }
   VLOG(1) << "Dataset processing finished. shutting down...";
 }
 
 void BenchmarkNode::runArrayBenchmark(const std::string& dataset_dir)
 {
-  // load images
-  std::string img_filename(dataset_dir + "/data/images.txt");
-  std::ifstream img_fs(img_filename.c_str());
-  if (!img_fs.is_open())
+  if (ncam_->numCameras() != 4) throw std::runtime_error("Array benchmark requires exactly four calibrated cameras");
+  const auto filename = (std::filesystem::path(dataset_dir)/"data/images.txt").string();
+  std::ifstream input(filename);
+  if (!input) throw std::runtime_error("Cannot open array image list: " + filename);
+  std::string line;
+  size_t id = 0;
+  while (rclcpp::ok() && std::getline(input,line))
   {
-    SVO_ERROR_STREAM("Could not open images file " << img_filename);
-    return;
-  }
-
-  size_t first_frame_id = vk::param<int>(pnh_, "dataset_first_frame", 0);
-  while (img_fs.good() && !img_fs.eof() && rclcpp::ok())
-  {
-    if (img_fs.peek() == '#')  // skip comments
-      img_fs.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
-
-    // load image
-    uint64_t stamp = 0;
-    std::string imgname1, imgname2, imgname3, imgname4;
-    if (!(img_fs >> stamp >> imgname1 >> imgname2 >> imgname3 >> imgname4)) break;
-    if (stamp < first_frame_id)
-      continue;
-    std::string();
-    cv::Mat img1(cv::imread(dataset_dir + "/data/" + imgname1, 0));
-    cv::Mat img2(cv::imread(dataset_dir + "/data/" + imgname2, 0));
-    cv::Mat img3(cv::imread(dataset_dir + "/data/" + imgname3, 0));
-    cv::Mat img4(cv::imread(dataset_dir + "/data/" + imgname4, 0));
-    if (img1.empty() || img2.empty() || img3.empty() || img4.empty())
+    const auto start = line.find_first_not_of(" \t\r");
+    if (start == std::string::npos || line[start] == '#') continue;
+    std::istringstream row(line);
+    int64_t stamp = -1; std::vector<std::string> paths(4);
+    if (!(row >> stamp) || stamp < 0) throw std::runtime_error("Malformed array timestamp: " + line);
+    for (auto& path : paths) if (!(row >> path)) throw std::runtime_error("Array row requires timestamp_ns and four paths: " + line);
+    ++input_records_;
+    const auto frame_id = id++;
+    if (frame_id < first_frame_id_ || (last_frame_id_ && frame_id >= last_frame_id_)) continue;
+    std::vector<cv::Mat> images;
+    for (const auto& path : paths)
     {
-      SVO_ERROR_STREAM("Reading image " << dataset_dir << "/data/" << imgname1
-                                        << " failed.");
-      return;
+      const auto image_path = (std::filesystem::path(dataset_dir)/"data"/path).string();
+      auto image = cv::imread(image_path,cv::IMREAD_GRAYSCALE);
+      if (image.empty()) throw std::runtime_error("Cannot read array image: " + image_path);
+      images.push_back(std::move(image));
     }
-
-    // add image to VO
-    processImageBundle({ img1, img2, img3, img4 }, stamp);
-    publishResults({ img1, img2, img3, img4 }, stamp);
-
-    cv::waitKey(10);
+    processOfflineFrame(images,stamp,frame_id);
+    if (svo_->stage() == Stage::kTracking)
+    {
+      const auto pose = svo_->getLastFrames()->get_T_W_B();
+      traceIdTimePose(pose,frame_id,stamp*1e-9);
+      if (FLAGS_stamp_estimate) tracePose(pose,stamp*1e-9); else tracePose(pose,frame_id);
+    }
   }
+  if (input.bad()) throw std::runtime_error("Failed reading array image list: " + filename);
 }
 
 }  // namespace svo
@@ -733,43 +788,56 @@ int main(int argc, char** argv)
   google::ParseCommandLineFlags(&flag_count, &flag_argv, true);
   google::InstallFailureSignalHandler();
 
-  rclcpp::Node node("svo");
-  auto& nh = node;
-  auto& pnh = node;
-  std::string benchmark_dir(
-      vk::param<std::string>(pnh, "dataset_directory", "/tmp"));
-  if (vk::param<bool>(pnh, "dataset_is_kitti", false))
+  try
   {
-    svo::BenchmarkNode benchmark(svo::PipelineType::kStereo, nh, pnh);
-    benchmark.runKittiBenchmark(benchmark_dir);
-  }
-  else if (vk::param<bool>(pnh, "dataset_is_blender", false))
-  {
-    // does depthmap contains z values or distance to the camera (default)
-    const bool depthmap_has_zbuffer =
-        vk::param<bool>(pnh, "depthmap_has_zbuffer", false);
-    svo::BenchmarkNode benchmark(svo::PipelineType::kMono, nh, pnh);
-    benchmark.runBlenderBenchmark(benchmark_dir, depthmap_has_zbuffer);
-  }
-  else if (vk::param<bool>(pnh, "dataset_is_array", false))
-  {
-    svo::BenchmarkNode benchmark(svo::PipelineType::kArray, nh, pnh);
-    benchmark.runArrayBenchmark(benchmark_dir);
-  }
-  else
-  {
-    if (vk::param<bool>(pnh, "dataset_is_stereo", true))
+    rclcpp::Node node("svo");
+    auto& nh = node;
+    auto& pnh = node;
+    std::string benchmark_dir(
+        vk::param<std::string>(pnh, "dataset_directory", "/tmp"));
+    if (vk::param<bool>(pnh, "dataset_is_kitti", false))
     {
       svo::BenchmarkNode benchmark(svo::PipelineType::kStereo, nh, pnh);
-      benchmark.runBenchmark(benchmark_dir);
+      benchmark.runKittiBenchmark(benchmark_dir);
+      benchmark.finish();
+    }
+    else if (vk::param<bool>(pnh, "dataset_is_blender", false))
+    {
+      // does depthmap contains z values or distance to the camera (default)
+      const bool depthmap_has_zbuffer =
+          vk::param<bool>(pnh, "depthmap_has_zbuffer", false);
+      svo::BenchmarkNode benchmark(svo::PipelineType::kMono, nh, pnh);
+      benchmark.runBlenderBenchmark(benchmark_dir, depthmap_has_zbuffer);
+      benchmark.finish();
+    }
+    else if (vk::param<bool>(pnh, "dataset_is_array", false))
+    {
+      svo::BenchmarkNode benchmark(svo::PipelineType::kArray, nh, pnh);
+      benchmark.runArrayBenchmark(benchmark_dir);
+      benchmark.finish();
     }
     else
     {
-      svo::BenchmarkNode benchmark(svo::PipelineType::kMono, nh, pnh);
-      benchmark.runBenchmark(benchmark_dir);
+      if (vk::param<bool>(pnh, "dataset_is_stereo", true))
+      {
+        svo::BenchmarkNode benchmark(svo::PipelineType::kStereo, nh, pnh);
+        benchmark.runBenchmark(benchmark_dir);
+        benchmark.finish();
+      }
+      else
+      {
+        svo::BenchmarkNode benchmark(svo::PipelineType::kMono, nh, pnh);
+        benchmark.runBenchmark(benchmark_dir);
+        benchmark.finish();
+      }
     }
-  }
 
+  }
+  catch (const std::exception& error)
+  {
+    std::cerr << "Offline benchmark failed: " << error.what() << std::endl;
+    rclcpp::shutdown(); return 1;
+  }
   SVO_INFO_STREAM("BenchmarkNodeWithCeres finished.");
   rclcpp::shutdown();
   return 0;
