@@ -2,10 +2,10 @@
 
 #include <thread>
 
-#include <ros/ros.h>
-#include <std_msgs/String.h>    // user-input
-#include <sensor_msgs/Image.h>
-#include <sensor_msgs/Imu.h>
+#include <rclcpp/rclcpp.hpp>
+#include <std_msgs/msg/string.hpp>    // user-input
+#include <sensor_msgs/msg/image.hpp>
+#include <sensor_msgs/msg/imu.hpp>
 
 
 #include <svo/common/types.h>
@@ -33,15 +33,8 @@ class SvoInterface
 {
 public:
 
-  // ROS subscription and publishing.
-  ros::NodeHandle nh_;
-  ros::NodeHandle pnh_;
+  rclcpp::Node& pnh_;
   PipelineType pipeline_type_;
-  ros::Subscriber sub_remote_key_;
-  std::string remote_input_;
-  std::unique_ptr<std::thread> imu_thread_;
-  std::unique_ptr<std::thread> image_thread_;
-
   // SVO modules.
   std::shared_ptr<FrameHandlerBase> svo_;
   std::shared_ptr<Visualizer> visualizer_;
@@ -61,8 +54,8 @@ public:
   bool automatic_reinitialization_ = false;
 
   SvoInterface(const PipelineType& pipeline_type,
-          const ros::NodeHandle& nh,
-          const ros::NodeHandle& private_nh);
+          rclcpp::Node& nh,
+          rclcpp::Node& private_nh, const std::string& run_dir = "");
 
   virtual ~SvoInterface();
 
@@ -77,27 +70,7 @@ public:
       const std::vector<cv::Mat>& images,
       const int64_t timestamp_nanoseconds);
 
-  // Subscription and callbacks
-  void monoCallback(const sensor_msgs::ImageConstPtr& msg);
-  void stereoCallback(
-      const sensor_msgs::ImageConstPtr& msg0,
-      const sensor_msgs::ImageConstPtr& msg1);
-  void imuCallback(const sensor_msgs::ImuConstPtr& imu_msg);
-  void inputKeyCallback(const std_msgs::StringConstPtr& key_input);
-
-
-  // These functions are called before and after monoCallback or stereoCallback.
-  // a derived class can implement some additional logic here.
-  virtual void imageCallbackPreprocessing(int64_t timestamp_nanoseconds) {}
+  virtual void imageCallbackPreprocessing(int64_t) {}
   virtual void imageCallbackPostprocessing() {}
-
-  void subscribeImu();
-  void subscribeImage();
-  void subscribeRemoteKey();
-
-  void imuLoop();
-  void monoLoop();
-  void stereoLoop();
 };
-
 } // namespace svo

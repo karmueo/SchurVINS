@@ -1,13 +1,14 @@
 // Modification Note: 
 // This file may have been modified by the authors of SchurVINS.
 // (All authors of SchurVINS are with PICO department of ByteDance Corporation)
-#include <ros/package.h>
+#include <ament_index_cpp/get_package_share_directory.hpp>
 
 #include <svo/svo.h>
 #include <svo/common/imu_calibration.h>
 #include <svo_ros/svo_factory.h>
 #include <svo/frame_handler_mono.h>
 #include <svo/frame_handler_stereo.h>
+#include <svo/frame_handler_array.h>
 #include <vikit/params_helper.h>
 
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
@@ -34,12 +35,13 @@
 namespace svo {
 namespace factory {
 
-BaseOptions loadBaseOptions(const ros::NodeHandle& pnh, bool forward_default)
+BaseOptions loadBaseOptions(rclcpp::Node& pnh, bool forward_default, const std::string& trace_dir)
 {
   BaseOptions o;
   o.max_n_kfs = vk::param<int>(pnh, "max_n_kfs", 5);
   o.use_imu = vk::param<bool>(pnh, "use_imu", false);
-  o.trace_dir = vk::param<std::string>(pnh, "trace_dir", ros::package::getPath("svo")+"/trace");
+  o.trace_dir = vk::param<std::string>(pnh, "trace_dir", std::string("/tmp/schurvins"));
+  if (!trace_dir.empty()) o.trace_dir = trace_dir;
   o.quality_min_fts = vk::param<int>(pnh, "quality_min_fts", 50);
   o.quality_max_fts_drop = vk::param<int>(pnh, "quality_max_drop_fts", 40);
   o.relocalization_max_trials = vk::param<int>(pnh, "relocalization_max_trials", 50);
@@ -85,7 +87,7 @@ BaseOptions loadBaseOptions(const ros::NodeHandle& pnh, bool forward_default)
   return o;
 }
 
-DetectorOptions loadDetectorOptions(const ros::NodeHandle& pnh)
+DetectorOptions loadDetectorOptions(rclcpp::Node& pnh)
 {
   DetectorOptions o;
   o.cell_size = vk::param<int>(pnh, "grid_size", 35);
@@ -100,7 +102,7 @@ DetectorOptions loadDetectorOptions(const ros::NodeHandle& pnh)
   return o;
 }
 
-DepthFilterOptions loadDepthFilterOptions(const ros::NodeHandle& pnh)
+DepthFilterOptions loadDepthFilterOptions(rclcpp::Node& pnh)
 {
   DepthFilterOptions o;
   o.max_search_level = vk::param<int>(pnh, "n_pyr_levels", 3) - 1;
@@ -129,7 +131,7 @@ DepthFilterOptions loadDepthFilterOptions(const ros::NodeHandle& pnh)
   return o;
 }
 
-InitializationOptions loadInitializationOptions(const ros::NodeHandle& pnh)
+InitializationOptions loadInitializationOptions(rclcpp::Node& pnh)
 {
   InitializationOptions o;
   o.init_min_features = vk::param<int>(pnh, "init_min_features", 100);
@@ -153,7 +155,7 @@ InitializationOptions loadInitializationOptions(const ros::NodeHandle& pnh)
   return o;
 }
 
-FeatureTrackerOptions loadTrackerOptions(const ros::NodeHandle& pnh)
+FeatureTrackerOptions loadTrackerOptions(rclcpp::Node& pnh)
 {
   FeatureTrackerOptions o;
   o.klt_max_level = vk::param<int>(pnh, "klt_max_level", 4);
@@ -161,7 +163,7 @@ FeatureTrackerOptions loadTrackerOptions(const ros::NodeHandle& pnh)
   return o;
 }
 
-ReprojectorOptions loadReprojectorOptions(const ros::NodeHandle& pnh)
+ReprojectorOptions loadReprojectorOptions(rclcpp::Node& pnh)
 {
   ReprojectorOptions o;
   o.max_n_kfs = vk::param<int>(pnh, "reprojector_max_n_kfs", 5);
@@ -192,7 +194,7 @@ ReprojectorOptions loadReprojectorOptions(const ros::NodeHandle& pnh)
   return o;
 }
 
-CameraBundle::Ptr loadCameraFromYaml(const ros::NodeHandle& pnh)
+CameraBundle::Ptr loadCameraFromYaml(rclcpp::Node& pnh)
 {
   std::string calib_file = vk::param<std::string>(pnh, "calib_file", "~/cam.yaml");
   CameraBundle::Ptr ncam = CameraBundle::loadFromYaml(calib_file);
@@ -203,7 +205,7 @@ CameraBundle::Ptr loadCameraFromYaml(const ros::NodeHandle& pnh)
 }
 
 #ifdef SVO_LOOP_CLOSING
-MapAlignmentOptions loadMapAlignmentOptions(const ros::NodeHandle& pnh)
+MapAlignmentOptions loadMapAlignmentOptions(rclcpp::Node& pnh)
 {
   MapAlignmentOptions o;
   o.ransac3d_inlier_percent =
@@ -213,13 +215,13 @@ MapAlignmentOptions loadMapAlignmentOptions(const ros::NodeHandle& pnh)
   return o;
 }
 
-LoopClosureOptions loadLoopClosureOptions(const ros::NodeHandle& pnh)
+LoopClosureOptions loadLoopClosureOptions(rclcpp::Node& pnh)
 {
   LoopClosureOptions o;
   o.runlc = vk::param<bool>(pnh, "runlc", false);
   o.voc_name = vk::param<std::string>(pnh, "voc_name", "test");
   std::string default_voc_path =
-      ros::package::getPath("svo_online_loopclosing") + "/vocabularies/";
+      ament_index_cpp::get_package_share_directory("svo_online_loopclosing") + "/vocabularies/";
   o.voc_path = vk::param<std::string>(pnh, "voc_path", default_voc_path);
   o.alpha = vk::param<double>(pnh, "alpha", 40.0);
   o.beta = vk::param<double>(pnh, "beta", 20.0);
@@ -243,7 +245,7 @@ LoopClosureOptions loadLoopClosureOptions(const ros::NodeHandle& pnh)
   return o;
 }
 
-LoopClosingPtr getLoopClosingModule(const ros::NodeHandle &pnh,
+LoopClosingPtr getLoopClosingModule(rclcpp::Node& pnh,
                                     const CameraBundlePtr& cam)
 {
   // Create camera
@@ -258,7 +260,7 @@ LoopClosingPtr getLoopClosingModule(const ros::NodeHandle &pnh,
 #endif
 
 #ifdef SVO_GLOBAL_MAP
-GlobalMapPtr getGlobalMap(const ros::NodeHandle& pnh,
+GlobalMapPtr getGlobalMap(rclcpp::Node& pnh,
                           const CameraBundlePtr& ncams)
 {
   GlobalMapOptions o;
@@ -370,7 +372,7 @@ GlobalMapPtr getGlobalMap(const ros::NodeHandle& pnh,
       vk::param<bool>(pnh, "ba_output_errors", false);
   gtsam_opt_options.trace_dir =
       vk::param<std::string>(pnh, "trace_dir",
-                             ros::package::getPath("svo")+"/trace");
+                             std::string("/tmp/schurvins"));
   gtsam_opt_options.optim_method =
       vk::param<std::string>(pnh, "isam_optimization_method",
                         std::string("GaussNewton"));
@@ -390,7 +392,7 @@ GlobalMapPtr getGlobalMap(const ros::NodeHandle& pnh,
 }
 #endif
 
-StereoTriangulationOptions loadStereoOptions(const ros::NodeHandle& pnh)
+StereoTriangulationOptions loadStereoOptions(rclcpp::Node& pnh)
 {
   StereoTriangulationOptions o;
   o.triangulate_n_features = vk::param<int>(pnh, "max_fts", 120);
@@ -400,7 +402,7 @@ StereoTriangulationOptions loadStereoOptions(const ros::NodeHandle& pnh)
   return o;
 }
 
-ImuHandler::Ptr getImuHandler(const ros::NodeHandle& pnh)
+ImuHandler::Ptr getImuHandler(rclcpp::Node& pnh)
 {
   std::string calib_file = vk::param<std::string>(pnh, "calib_file", "");
   ImuCalibration imu_calib = ImuHandler::loadCalibrationFromFile(calib_file);
@@ -420,7 +422,7 @@ ImuHandler::Ptr getImuHandler(const ros::NodeHandle& pnh)
   return imu_handler;
 }
 
-void setInitialPose(const ros::NodeHandle& pnh, FrameHandlerBase& vo)
+void setInitialPose(rclcpp::Node& pnh, FrameHandlerBase& vo)
 {
   Transformation T_world_imuinit(
         Quaternion(vk::param<double>(pnh, "T_world_imuinit/qw", 1.0),
@@ -434,7 +436,7 @@ void setInitialPose(const ros::NodeHandle& pnh, FrameHandlerBase& vo)
 }
 
 
-FrameHandlerMono::Ptr makeMono(const ros::NodeHandle& pnh, const CameraBundlePtr& cam)
+FrameHandlerMono::Ptr makeMono(rclcpp::Node& pnh, const CameraBundlePtr& cam, const std::string& trace_dir)
 {
   // Create camera
   CameraBundle::Ptr ncam = (cam) ? cam : loadCameraFromYaml(pnh);
@@ -447,7 +449,7 @@ FrameHandlerMono::Ptr makeMono(const ros::NodeHandle& pnh, const CameraBundlePtr
   // Init VO
   FrameHandlerMono::Ptr vo =
       std::make_shared<FrameHandlerMono>(
-        loadBaseOptions(pnh, false),
+        loadBaseOptions(pnh, false, trace_dir),
         loadDepthFilterOptions(pnh),
         loadDetectorOptions(pnh),
         loadInitializationOptions(pnh),
@@ -461,7 +463,7 @@ FrameHandlerMono::Ptr makeMono(const ros::NodeHandle& pnh, const CameraBundlePtr
   return vo;
 }
 
-FrameHandlerStereo::Ptr makeStereo(const ros::NodeHandle& pnh, const CameraBundlePtr& cam)
+FrameHandlerStereo::Ptr makeStereo(rclcpp::Node& pnh, const CameraBundlePtr& cam, const std::string& trace_dir)
 {
   // Load cameras
   CameraBundle::Ptr ncam = (cam) ? cam : loadCameraFromYaml(pnh);
@@ -476,7 +478,7 @@ FrameHandlerStereo::Ptr makeStereo(const ros::NodeHandle& pnh, const CameraBundl
   init_options.init_type = InitializerType::kStereo;
   FrameHandlerStereo::Ptr vo =
       std::make_shared<FrameHandlerStereo>(
-        loadBaseOptions(pnh, true),
+        loadBaseOptions(pnh, true, trace_dir),
         loadDepthFilterOptions(pnh),
         loadDetectorOptions(pnh),
         init_options,
@@ -491,7 +493,7 @@ FrameHandlerStereo::Ptr makeStereo(const ros::NodeHandle& pnh, const CameraBundl
   return vo;
 }
 
-FrameHandlerArray::Ptr makeArray(const ros::NodeHandle& pnh, const CameraBundlePtr& cam)
+FrameHandlerArray::Ptr makeArray(rclcpp::Node& pnh, const CameraBundlePtr& cam, const std::string& trace_dir)
 {
   // Load cameras
   CameraBundle::Ptr ncam = (cam) ? cam : loadCameraFromYaml(pnh);
@@ -504,7 +506,7 @@ FrameHandlerArray::Ptr makeArray(const ros::NodeHandle& pnh, const CameraBundleP
   depth_filter_options.verbose = true;
   FrameHandlerArray::Ptr vo =
       std::make_shared<FrameHandlerArray>(
-        loadBaseOptions(pnh, true),
+        loadBaseOptions(pnh, true, trace_dir),
         depth_filter_options,
         loadDetectorOptions(pnh),
         init_options,

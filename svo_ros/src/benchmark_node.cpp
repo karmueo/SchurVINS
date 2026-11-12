@@ -4,8 +4,8 @@
 #include <iostream>
 #include <glog/logging.h>
 #include <gflags/gflags.h>
-#include <ros/ros.h>
-#include <ros/package.h>
+#include <rclcpp/rclcpp.hpp>
+#include <ament_index_cpp/get_package_share_directory.hpp>
 #include <opencv2/opencv.hpp>
 #include <vikit/params_helper.h>
 #include <vikit/blender_utils.h>
@@ -49,8 +49,8 @@ class BenchmarkNode : public SvoInterface
 #endif
 
 public:
-  BenchmarkNode(const PipelineType& type, const ros::NodeHandle& nh,
-                const ros::NodeHandle& pnh);
+  BenchmarkNode(const PipelineType& type, rclcpp::Node& nh,
+                rclcpp::Node& pnh);
 
   // general evaluation functions: general dataset
   void runBenchmark(const std::string& dataset_dir);
@@ -120,8 +120,8 @@ private:
 };
 
 BenchmarkNode::BenchmarkNode(const PipelineType& type,
-                             const ros::NodeHandle& nh,
-                             const ros::NodeHandle& pnh)
+                             rclcpp::Node& nh,
+                             rclcpp::Node& pnh)
   : SvoInterface(type, nh, pnh)
 {
   // create pose tracefile
@@ -149,16 +149,16 @@ BenchmarkNode::BenchmarkNode(const PipelineType& type,
   sleep_us_ = static_cast<size_t>(vk::param<int>(pnh_, "sleep_us", 0));
 
   first_frame_id_ =
-      static_cast<size_t>(vk::getParam<int>("svo/dataset_first_frame", 0));
+      static_cast<size_t>(vk::param<int>(pnh_, "dataset_first_frame", 0));
   last_frame_id_ =
-      static_cast<size_t>(vk::getParam<int>("svo/dataset_last_frame", 0));
+      static_cast<size_t>(vk::param<int>(pnh_, "dataset_last_frame", 0));
 
-  trace_only_kf_ = vk::getParam<bool>("svo/trace_only_keyframes", false);
+  trace_only_kf_ = vk::param<bool>(pnh_, "trace_only_keyframes", false);
 
   blackout_start_id_ =
-      static_cast<size_t>(vk::getParam<int>("svo/blackout_first_id", 0));
+      static_cast<size_t>(vk::param<int>(pnh_, "blackout_first_id", 0));
   blackout_end_id_ =
-      static_cast<size_t>(vk::getParam<int>("svo/blackout_last_id", 0));
+      static_cast<size_t>(vk::param<int>(pnh_, "blackout_last_id", 0));
 }
 
 void BenchmarkNode::safeCreateTrace(const std::string& trace_fn,
@@ -288,7 +288,7 @@ void BenchmarkNode::runBenchmark(const std::string& dataset_dir)
     return;
   }
 
-  while (img_fs.good() && !img_fs.eof() && ros::ok())
+  while (img_fs.good() && !img_fs.eof() && rclcpp::ok())
   {
     // load image
     size_t img_id;
@@ -587,7 +587,7 @@ void BenchmarkNode::runBlenderBenchmark(const std::string& dataset_dir,
   // process next frames
   frame_count_ = 1;
   FramePtr cur_frame;
-  while (dataset.getNextFrame(n_pyr_levels, cur_frame, nullptr) && ros::ok())
+  while (dataset.getNextFrame(n_pyr_levels, cur_frame, nullptr) && rclcpp::ok())
   {
     T_w_gt = cur_frame->T_f_w_.inverse();
 
@@ -595,7 +595,7 @@ void BenchmarkNode::runBlenderBenchmark(const std::string& dataset_dir,
     SVO_DEBUG_STREAM("Processing image " << frame_count_ << ".");
 
     processImageBundle({ cur_frame->img() }, cur_frame->id());
-    publishResults({ cur_frame->img() }, ros::Time::now().toNSec());
+    publishResults({ cur_frame->img() }, rclcpp::Clock().now().nanoseconds());
 
     if (svo_->stage() != Stage::kTracking)
     {
@@ -638,7 +638,7 @@ void BenchmarkNode::runKittiBenchmark(const std::string& dataset_dir)
             << std::endl;
 
   // process dataset
-  while (dataset_fs.good() && !dataset_fs.eof() && ros::ok())
+  while (dataset_fs.good() && !dataset_fs.eof() && rclcpp::ok())
   {
     // skip comments
     if (dataset_fs.peek() == '#')
@@ -657,7 +657,7 @@ void BenchmarkNode::runKittiBenchmark(const std::string& dataset_dir)
       return;
     }
     processImageBundle({ img_l_8uC1, img_r_8uC1 }, id);
-    publishResults({ img_l_8uC1, img_r_8uC1 }, ros::Time::now().toNSec());
+    publishResults({ img_l_8uC1, img_r_8uC1 }, rclcpp::Clock().now().nanoseconds());
     if (svo_->getLastFrames())
       tracePoseKitti(svo_->getLastFrames()->at(0)->T_world_cam());
   }
@@ -675,8 +675,8 @@ void BenchmarkNode::runArrayBenchmark(const std::string& dataset_dir)
     return;
   }
 
-  size_t first_frame_id = vk::getParam<int>("svo/dataset_first_frame", 0);
-  while (img_fs.good() && !img_fs.eof() && ros::ok())
+  size_t first_frame_id = vk::param<int>(pnh_, "dataset_first_frame", 0);
+  while (img_fs.good() && !img_fs.eof() && rclcpp::ok())
   {
     if (img_fs.peek() == '#')  // skip comments
       img_fs.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
@@ -715,9 +715,10 @@ int main(int argc, char** argv)
   google::ParseCommandLineFlags(&argc, &argv, true);
   google::InstallFailureSignalHandler();
 
-  ros::init(argc, argv, "svo");
-  ros::NodeHandle nh;
-  ros::NodeHandle pnh("~");
+  rclcpp::init(argc, argv);
+  rclcpp::Node node("svo");
+  auto& nh = node;
+  auto& pnh = node;
   std::string benchmark_dir(
       vk::param<std::string>(pnh, "dataset_directory", "/tmp"));
   if (vk::param<bool>(pnh, "dataset_is_kitti", false))
@@ -732,6 +733,11 @@ int main(int argc, char** argv)
         vk::param<bool>(pnh, "depthmap_has_zbuffer", false);
     svo::BenchmarkNode benchmark(svo::PipelineType::kMono, nh, pnh);
     benchmark.runBlenderBenchmark(benchmark_dir, depthmap_has_zbuffer);
+  }
+  else if (vk::param<bool>(pnh, "dataset_is_array", false))
+  {
+    svo::BenchmarkNode benchmark(svo::PipelineType::kArray, nh, pnh);
+    benchmark.runArrayBenchmark(benchmark_dir);
   }
   else
   {
@@ -748,5 +754,6 @@ int main(int argc, char** argv)
   }
 
   SVO_INFO_STREAM("BenchmarkNodeWithCeres finished.");
+  rclcpp::shutdown();
   return 0;
 }

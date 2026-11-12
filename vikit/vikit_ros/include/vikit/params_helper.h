@@ -1,75 +1,22 @@
-/*
- * ros_params_helper.h
- *
- *  Created on: Feb 22, 2013
- *      Author: cforster
- *
- * from libpointmatcher_ros
- */
-
-#ifndef ROS_PARAMS_HELPER_H_
-#define ROS_PARAMS_HELPER_H_
-
+/* Parameter helpers for native ROS 2. Original author: cforster. */
+#pragma once
+#include <algorithm>
 #include <string>
-#include <ros/ros.h>
-
+#include <rclcpp/rclcpp.hpp>
 namespace vk {
-
-inline
-bool hasParam(const std::string& name)
+inline std::string parameterName(std::string name)
 {
-  return ros::param::has(name);
+  std::replace(name.begin(), name.end(), '/', '.');
+  while (!name.empty() && name.front() == '.') name.erase(name.begin());
+  return name;
 }
-
 template<typename T>
-T getParam(const std::string& name, const T& defaultValue)
+T param(rclcpp::Node& node, const std::string& name, const T& value, bool = false)
 {
-  T v;
-  if(ros::param::get(name, v))
-  {
-    ROS_INFO_STREAM("Found parameter: " << name << ", value: " << v);
-    return v;
-  }
-  else
-    ROS_WARN_STREAM("Cannot find value for parameter: " << name << ", assigning default: " << defaultValue);
-  return defaultValue;
+  const auto key = parameterName(name);
+  if (node.has_parameter(key)) return node.get_parameter(key).get_value<T>();
+  rcl_interfaces::msg::ParameterDescriptor descriptor;
+  descriptor.read_only = true;
+  return node.declare_parameter<T>(key, value, descriptor);
 }
-
-template<typename T>
-T getParam(const std::string& name)
-{
-  T v;
-  if(ros::param::get(name, v))
-  {
-    ROS_INFO_STREAM("Found parameter: " << name << ", value: " << v);
-    return v;
-  }
-  else
-    ROS_ERROR_STREAM("Cannot find value for parameter: " << name);
-  return T();
-}
-
-template<typename T>
-T param(const ros::NodeHandle& nh, const std::string& name, const T& defaultValue,
-        const bool silent=false)
-{
-  if(nh.hasParam(name))
-  {
-    T v;
-    nh.param<T>(name, v, defaultValue);
-    if (!silent)
-    {
-      ROS_INFO_STREAM("Found parameter: " << name << ", value: " << v);
-    }
-    return v;
-  }
-  if (!silent)
-  {
-    ROS_WARN_STREAM("Cannot find value for parameter: " << name << ", assigning default: " << defaultValue);
-  }
-  return defaultValue;
-}
-
-} // namespace vk
-
-#endif // ROS_PARAMS_HELPER_H_
+}  // namespace vk
