@@ -1,4 +1,4 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 """
 @author: Christian Forster
 """
@@ -13,7 +13,7 @@ init(autoreset=True)
 
 
 def run_evaluation_script(trace_dir, script):
-    command = 'rosrun ' + script['ros_node'] + ' ' + script['ros_executable']
+    command = 'ros2 run ' + script['ros_node'] + ' ' + script['ros_executable']
     # position parameters
     if 'params' in script:
         for param in script['params']:
@@ -23,28 +23,28 @@ def run_evaluation_script(trace_dir, script):
                 command += " " + param
     # flags
     if 'flags' in script:
-        for key, option in script['flags'].items():
+        for key, option in list(script['flags'].items()):
             command += ' --'+str(key)+'='+str(option)
-    print(Fore.RED+'==> Staring: '+command)
+    print((Fore.RED+'==> Staring: '+command))
     os.system(command)
-    print(Fore.GREEN+'<== Finished')
+    print((Fore.GREEN+'<== Finished'))
 
 
 def evaluate_dataset(trace_dir):
     if os.path.exists(os.path.join(trace_dir, 'evaluation_scripts.yaml')):
-        eval_scripts = yaml.load(
+        eval_scripts = yaml.safe_load(
             open(os.path.join(trace_dir, 'evaluation_scripts.yaml'), 'r'))
         for script in eval_scripts:
             run_evaluation_script(trace_dir, script)
     else:
-        print('Folder "'+trace_dir +
-              '" does not contain a file "evaluation_scripts.yaml".')
+        print(('Folder "'+trace_dir +
+              '" does not contain a file "evaluation_scripts.yaml".'))
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='''
     Evaluates tracefiles of SVO and generates the plots.
-    The experiment folder should contain an "evaluation_scripts.yaml" that 
+    The experiment folder should contain an "evaluation_scripts.yaml" that
     specifies scripts to run.
     ''')
     parser.add_argument(

@@ -1,4 +1,4 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 
 import argparse
 import os
@@ -13,13 +13,13 @@ if __name__ == "__main__":
         'top_dir', help='directory name of the tracefiles')
     args = parser.parse_args()
 
-    subfolders = [v for v in os.listdir(args.top_dir) 
+    subfolders = [v for v in os.listdir(args.top_dir)
                   if os.path.join(args.top_dir, v)]
-    print("Going to evaluate the following folders:{0}".format(subfolders))
+    print(("Going to evaluate the following folders:{0}".format(subfolders)))
     subfolders = [os.path.join(args.top_dir, v) for v in subfolders]
 
     for s in subfolders:
         if not os.path.exists(os.path.join(s, 'evaluation_scripts.yaml')):
-            print("skip {0}".format(s))
+            print(("skip {0}".format(s)))
             continue
         evaluate_dataset(s)

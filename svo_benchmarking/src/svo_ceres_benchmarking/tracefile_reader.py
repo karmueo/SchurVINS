@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python3
 """
 @author: Christian Forster
 """
@@ -11,7 +11,7 @@ import numpy as np
 def read(trace_dir, trace_name):
     # read tracefile
     data = csv.reader(open(os.path.join(trace_dir, trace_name)))
-    fields = data.next()
+    fields = next(data)
     D = dict()
     for field in fields:
         D[field] = list()
@@ -22,7 +22,7 @@ def read(trace_dir, trace_name):
             D[field].append(float(value))
 
     # change dictionary values from list to numpy array for easier manipulation
-    for field, value in D.items():
+    for field, value in list(D.items()):
         D[field] = np.array(D[field])
 
     return D

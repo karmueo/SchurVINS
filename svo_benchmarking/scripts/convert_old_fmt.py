@@ -1,4 +1,4 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 
 import os
 import argparse
@@ -27,17 +27,17 @@ if __name__ == '__main__':
     res_dirs = [v for v in os.listdir(abs_res_dir)
                 if os.path.isdir(os.path.join(abs_res_dir, v))]
     res_dirs.sort()
-    print("Found directories {0}".format(res_dirs))
+    print(("Found directories {0}".format(res_dirs)))
 
     for d in res_dirs:
-        print("Processing {0}...".format(d))
+        print(("Processing {0}...".format(d)))
         abs_dir = os.path.join(abs_res_dir, d)
         subprocess.call(
-            ['rosrun', 'rpg_trajectory_evaluation',
+            ['ros2', 'run', 'rpg_trajectory_evaluation',
              'stamp_state_est_using_matches.py', 'traj_estimate.txt'],
             cwd=abs_dir)
         subprocess.call(
-            ['rosrun', 'rpg_trajectory_evaluation', 'strip_gt_id.py',
+            ['ros2', 'run', 'rpg_trajectory_evaluation', 'strip_gt_id.py',
              'groundtruth.txt'], cwd=abs_dir)
         subprocess.call(
             ['mv', 'stamped_traj_estimate.txt', 'stamped_traj_estimate0.txt'],

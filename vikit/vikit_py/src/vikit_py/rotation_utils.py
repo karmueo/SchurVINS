@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python3
 
 import math
 import numpy as np
@@ -6,10 +6,10 @@ import numpy as np
 _EPS = np.finfo(float).eps * 4.0
 
 
-   
-    
-        
-    
+
+
+
+
 def quat2dcm(quaternion):
     """Returns direct cosine matrix from quaternion (Hamiltonian, [x y z w])
     """
@@ -55,14 +55,14 @@ def dcm2quat(matrix_3x3):
         q[j] = (M[i, j] + M[j, i])*t
         q[k] = (M[k, i] + M[i, k])*t
     return q
-    
+
 def dcm2rpy(matrix):
     """Return roll pitch yaw from matrix
     """
     R = np.array(matrix, dtype=np.float64, copy=False)[:3, :3]
     rpy = np.empty((3), dtype=np.float64)
     rpy[1] = math.atan2(-R[2,0], math.sqrt( R[0,0]**2 + R[1,0]**2 ))
-        
+
     if np.abs(rpy[1] - math.pi/2.0 ) < 0.00001:
         rpy[2] = 0;
         rpy[0] = -math.atan2( R[0,1], R[1,1] )
@@ -73,14 +73,14 @@ def dcm2rpy(matrix):
         else:
             rpy[2] = math.atan2( R[1,0]/math.cos(rpy[1]), R[0,0]/math.cos(rpy[1]) )
             rpy[0] = math.atan2( R[2,1]/math.cos(rpy[1]), R[2,2]/math.cos(rpy[1]) )
-            
+
     return rpy
-    
+
 def quat2rpy(quaternion):
     """Return roll pitch yaw from quaternion
     """
     return dcm2rpy(quat2dcm(quaternion))
-    
+
 def quat_multiply(quaternion1, quaternion0):
     """Return multiplication of two quaternions.
     """
@@ -105,5 +105,5 @@ def quat_inverse(quaternion):
     return quat_conjugate(quaternion) / np.dot(quaternion, quaternion)
 
 
-    
-    
+
+

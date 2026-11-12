@@ -1,9 +1,9 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 
 import numpy as np
-import transformations as tf
+from . import transformations as tf
 
-import tfs_utils as tu
+from . import tfs_utils as tu
 
 
 def hand_eye_calib(q_gt, q_es, p_gt, p_es, I, delta=10, verbose=True):

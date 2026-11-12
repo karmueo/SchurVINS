@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python3
 """
 @author: Christian Forster
 """
@@ -6,7 +6,7 @@
 import os
 import sys
 import yaml
-import rospkg
+from ament_index_python.packages import get_package_share_directory
 import argparse
 import time
 import ros_node
@@ -21,7 +21,7 @@ init(autoreset=True)
 
 def get_cpu_info():
     command = "cat /proc/cpuinfo"
-    all_info = subprocess.check_output(command, shell=True).strip()
+    all_info = subprocess.check_output(command, shell=True, text=True).strip()
     for line in all_info.split("\n"):
         if "model name" in line:
             model_name = re.sub(".*model name.*:", "", line, 1).strip()
@@ -36,7 +36,7 @@ def copy_files_to_tracedir(dataset_dir, trace_dir, files_to_copy=None):
                        'evaluation_scripts.yaml']
     for f in essential_files:
         if os.path.isfile(os.path.join(dataset_dir, f)):
-            print("Copy {0} to the trace folder.".format(f))
+            print(("Copy {0} to the trace folder.".format(f)))
             shutil.copyfile(os.path.join(dataset_dir, f),
                             os.path.join(trace_dir, os.path.basename(f)))
 
@@ -44,7 +44,7 @@ def copy_files_to_tracedir(dataset_dir, trace_dir, files_to_copy=None):
         print('Copy dataset specific files.')
         for fn in files_to_copy:
             if os.path.isfile(os.path.join(dataset_dir, fn)):
-                print('Copy ' + fn + ' to trace directory.')
+                print(('Copy ' + fn + ' to trace directory.'))
                 shutil.copyfile(os.path.join(dataset_dir, fn),
                                 os.path.join(trace_dir, os.path.basename(fn)))
 
@@ -56,8 +56,8 @@ def run_single_experiment(params, node='svo_ros', node_name='benchmark'):
     dataset_params_file = os.path.join(params['dataset_directory'],
                                        'dataset.yaml')
     if os.path.exists(dataset_params_file):
-        dataset_params = yaml.load(open(dataset_params_file, 'r'))
-        params = dict(params.items() + dataset_params.items())
+        dataset_params = yaml.safe_load(open(dataset_params_file, 'r'))
+        params = dict(list(params.items()) + list(dataset_params.items()))
 
     # Check that calibration file exists
     calib_name = 'calib.yaml'
@@ -73,15 +73,12 @@ def run_single_experiment(params, node='svo_ros', node_name='benchmark'):
                     os.path.join(params['trace_dir'], 'calib.yaml'))
 
     # execute ros node
-    os.system('rosparam delete /svo')
     node = ros_node.RosNode(node, node_name)
     node.run(params, '', True, params['trace_dir'])
-    os.system('rosparam dump '+os.path.join(params['trace_dir'],
-                                            'params_ros.yaml'))
 
     # dump experiment params to file and copy the other parameter files:
     params['platform'] = get_cpu_info()
-    params['ros_node'] = node
+    params['ros_node'] = node._package
     params['ros_node_name'] = node_name
     params_dump_file = os.path.join(params['trace_dir'], 'params.yaml')
     with open(params_dump_file, 'w') as outfile:
@@ -92,11 +89,11 @@ def run_experiments(experiment_file, num_monte_carlo_runs=None,
                     align_type='posyaw', n_aligned=-1):
     experiment_file = experiment_file.replace('.yaml', '')
     experiment_params_file = os.path.join(
-        rospkg.RosPack().get_path('svo_benchmarking'),
+        get_package_share_directory('svo_benchmarking'),
         'experiments', experiment_file+'.yaml')
 
     # Load base algorithm parameters.
-    experiment_params = yaml.load(open(experiment_params_file, 'r'))
+    experiment_params = yaml.safe_load(open(experiment_params_file, 'r'))
     base_params = dict()
     base_params['experiment_label'] = experiment_params['experiment_label']
     base_params['time'] = time.strftime("%Y%m%d_%H%M%S", time.localtime())
@@ -107,8 +104,8 @@ def run_experiments(experiment_file, num_monte_carlo_runs=None,
 
     # pipeline parameters
     if 'settings' in experiment_params:
-        base_params = dict(base_params.items() +
-                           experiment_params['settings'].items())
+        base_params = dict(list(base_params.items()) +
+                           list(experiment_params['settings'].items()))
     # benchmark node flag: verbosity, etc.
     if 'flags' in experiment_params:
         base_params['flags'] = experiment_params['flags']
@@ -117,11 +114,11 @@ def run_experiments(experiment_file, num_monte_carlo_runs=None,
 
     # Get base folder where trace-folder is created.
     trace_base_dir = os.path.join(
-        rospkg.RosPack().get_path('svo_benchmarking'), 'results')
+        os.environ.get('SVO_OUTPUT_DIR', os.path.expanduser('~/schurvins-results')), 'experiments')
     if 'trace_base_dir' in experiment_params:
         trace_base_dir = experiment_params['trace_base_dir']
-        print("Overwrite the default trace directory with {0}.".format(
-            trace_base_dir))
+        print(("Overwrite the default trace directory with {0}.".format(
+            trace_base_dir)))
 
     if num_monte_carlo_runs is None:
         if 'num_monte_carlo_runs' in experiment_params:
@@ -143,7 +140,7 @@ def run_experiments(experiment_file, num_monte_carlo_runs=None,
 
         # Check if dataset directory exists
         cur_params['dataset_directory'] = os.path.join(
-            rospkg.RosPack().get_path('svo_benchmarking'),
+            get_package_share_directory('svo_benchmarking'),
             'data', dataset_cfg['name'])
         assert os.path.exists(cur_params['dataset_directory']),\
             "Dataset {0} does not exist.".format(
@@ -154,8 +151,8 @@ def run_experiments(experiment_file, num_monte_carlo_runs=None,
         dataset_params_file = os.path.join(cur_params['dataset_directory'],
                                            'dataset.yaml')
         if os.path.exists(dataset_params_file):
-            dataset_params = yaml.load(open(dataset_params_file, 'r'))
-            cur_params = dict(cur_params.items() + dataset_params.items())
+            dataset_params = yaml.safe_load(open(dataset_params_file, 'r'))
+            cur_params = dict(list(cur_params.items()) + list(dataset_params.items()))
         else:
             cur_params['dataset_name'] = dataset_cfg['name']
 
@@ -171,12 +168,12 @@ def run_experiments(experiment_file, num_monte_carlo_runs=None,
             os.makedirs(cur_params['trace_dir'])
         trace_dirs.append((dataset_cfg['name'], cur_params['trace_dir']))
 
-        print(Fore.RED+">>>>> Start experiments for {0}...".format(
-            cur_params['dataset_name']))
-        print(Fore.RED+">>>>> Will do {0} MC runs.".format(
-            num_monte_carlo_runs))
-        print(Fore.RED+">>>>> Trace will be saved in {0}.".format(
-            cur_params['trace_dir']))
+        print((Fore.RED+">>>>> Start experiments for {0}...".format(
+            cur_params['dataset_name'])))
+        print((Fore.RED+">>>>> Will do {0} MC runs.".format(
+            num_monte_carlo_runs)))
+        print((Fore.RED+">>>>> Trace will be saved in {0}.".format(
+            cur_params['trace_dir'])))
 
         # copy essential files
         shutil.copyfile(experiment_params_file,
@@ -193,14 +190,14 @@ def run_experiments(experiment_file, num_monte_carlo_runs=None,
 
         # create evaluation config file
         eval_cfg = {'align_type': align_type, 'align_num_frames': n_aligned}
-        print("Will write evaluation config:{0}".format(eval_cfg))
-        with open(os.path.join(cur_params['trace_dir'], 'eval_cfg.yaml'), 
+        print(("Will write evaluation config:{0}".format(eval_cfg)))
+        with open(os.path.join(cur_params['trace_dir'], 'eval_cfg.yaml'),
                   'w') as f:
             yaml.dump(eval_cfg, f, default_flow_style=False)
 
         # Run Monte-Carlo Iterations
         for trial_idx in range(num_monte_carlo_runs):
-            print(Fore.RED+">>> Trial {0}...".format(trial_idx))
+            print((Fore.RED+">>> Trial {0}...".format(trial_idx)))
 
             params_i = cur_params.copy()
 

@@ -1,11 +1,11 @@
-#!/usr/bin/python
+#!/usr/bin/env python3
 """
 @author: Christian Forster
 """
 
 import os
 import numpy as np
-import transformations as tf
+from . import transformations as tf
 
 
 def compute_comparison_indices_time(t_gt, dist, max_error):

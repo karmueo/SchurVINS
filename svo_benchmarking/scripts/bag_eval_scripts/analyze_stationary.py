@@ -1,8 +1,8 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
 
-import rosbag
+from svo_ceres_benchmarking.rosbag2_io import read_messages, stamp_seconds, stamp_ns
 import argparse
 import os
 import numpy as np
@@ -23,39 +23,39 @@ if __name__ == '__main__':
     assert args.end > args.start
 
     assert os.path.exists(args.bag_name), "File does not exist."
-    print("Going to analyze {0} in {1}...".format(args.topic_name, args.bag_name))
+    print(("Going to analyze {0} in {1}...".format(args.topic_name, args.bag_name)))
     save_prefix = os.path.basename(args.bag_name).split('.')[0]\
                   + '_'.join(args.topic_name.split('/')) + '_'
-    print("Save preifx is {0}".format(save_prefix))
+    print(("Save preifx is {0}".format(save_prefix)))
 
-    bag = rosbag.Bag(args.bag_name)
+    bag_uri = args.bag_name
     pose_msgs = []
-    for topic, msg, t in bag.read_messages(topics=[args.topic_name]):
+    for topic, msg, t in read_messages(bag_uri, topics=[args.topic_name]):
         pose_msgs.append(msg)
 
     n_total = len(pose_msgs)
-    print("Collected {0} pose messages.".format(len(pose_msgs)))
+    print(("Collected {0} pose messages.".format(len(pose_msgs))))
 
     n_start = int(n_total * args.start)
     n_end = int(n_total * args.end)
-    print("Going to analyze from {0} to {1}...".format(n_start, n_end))
+    print(("Going to analyze from {0} to {1}...".format(n_start, n_end)))
 
     positions = []
     times = []
     prev_seq = -1
     for i in range(n_total):
         msg_i = pose_msgs[i]
-        seq_i = msg_i.header.seq
+        seq_i = stamp_ns(msg_i.header.stamp)
         assert seq_i > prev_seq, "{0} vs {1}".format(seq_i, prev_seq)
         prev_seq = seq_i
         pos_i = pose_msgs[i].pose.pose.position
         positions.append([pos_i.x, pos_i.y, pos_i.z])
-        times.append(msg_i.header.stamp.to_sec())
+        times.append(stamp_seconds(msg_i.header.stamp))
 
     static_pos = np.array(positions[n_start:n_end])
     static_times = np.array(times[n_start:n_end])
     n_static = static_pos.shape[0]
-    print("Extracted {0} static positions.".format(n_static))
+    print(("Extracted {0} static positions.".format(n_static)))
 
     # calculate statistics
     mean_pos = np.mean(static_pos, axis=0)
@@ -64,8 +64,8 @@ if __name__ == '__main__':
         std_pos[i] = np.std(static_pos[:, i])
     names = ['x', 'y', 'z']
 
-    print("The average position is {0}.".format(mean_pos))
-    print("The standard deviation of each axis is {0}.".format(std_pos))
+    print(("The average position is {0}.".format(mean_pos)))
+    print(("The standard deviation of each axis is {0}.".format(std_pos)))
     fig, axes = plt.subplots(4, 1, sharex=True, figsize=(8, 8))
     for i, ax in enumerate(axes[0:3]):
         mean_i = np.ones((static_pos.shape[0])) * mean_pos[i]
@@ -81,7 +81,7 @@ if __name__ == '__main__':
     offset_pos = static_pos - mean_pos
     dist_pos = np.array([np.linalg.norm(v) for v in offset_pos])
     std_pos_vec = np.sqrt((np.sum(dist_pos**2)) / (n_static - 1))
-    print("The standard deviation of position is {0}".format(std_pos_vec))
+    print(("The standard deviation of position is {0}".format(std_pos_vec)))
     zero_dist = np.zeros((static_pos.shape[0]))
     ax = axes[3]
     ax.plot(static_times, zero_dist, ls= '--', color='k',

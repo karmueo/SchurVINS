@@ -1,4 +1,4 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 
 import os
 import argparse
@@ -18,13 +18,13 @@ if __name__ == '__main__':
     outfn = os.path.join(outdir,
                          'id_' + os.path.basename(args.org_file))
 
-    print("Going to prepend id to {0} and write to {1}".format(
-        args.org_file, outfn))
+    print(("Going to prepend id to {0} and write to {1}".format(
+        args.org_file, outfn)))
 
     org_content = []
     with open(args.org_file) as f:
         org_content = f.readlines()
-    print("Found {0} data".format(len(org_content)))
+    print(("Found {0} data".format(len(org_content))))
 
     id_content = []
     cnt = 0

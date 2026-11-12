@@ -1,8 +1,8 @@
-#!/usr/bin/python
+#!/usr/bin/env python3
 
 import math
 import numpy as np
-import transformations as tf
+from . import transformations as tf
 
 _EPS = np.finfo(float).eps * 4.0
 

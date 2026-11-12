@@ -1,78 +1,39 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
+# Original utility: www.asl.ethz.ch, IJRR MAV datasets. ROS2 port.
+"""Copy a ROS2 bag using message header timestamps (MCAP or SQLite3)."""
+import argparse
+import rosbag2_py
+from rclpy.serialization import deserialize_message
+from rosidl_runtime_py.utilities import get_message
+from svo_ceres_benchmarking.rosbag2_io import open_reader, stamp_ns
 
-# ------------------------------------------------------------------------------
-# Function : restamp ros bagfile (using header timestamps)
-# Project  : IJRR MAV Datasets
-# Author   : www.asl.ethz.ch
-# Version  : V01  21JAN2016 Initial version.
-# Comment  :
-# Status   : under review
-#
-# Usage    : python restamp_bag.py -i inbag.bag -o outbag.bag
-# ------------------------------------------------------------------------------
 
-import roslib
-import rosbag
-import rospy
-import sys
-import getopt
-from   std_msgs.msg import String
+def restamp(source, destination, storage='mcap'):
+    reader = open_reader(source)
+    writer = rosbag2_py.SequentialWriter()
+    writer.open(rosbag2_py.StorageOptions(uri=destination, storage_id=storage),
+                rosbag2_py.ConverterOptions('', ''))
+    types = reader.get_all_topics_and_types()
+    classes = {}
+    for topic in types:
+        writer.create_topic(topic)
+        classes[topic.name] = get_message(topic.type)
+    count = 0
+    while reader.has_next():
+        topic, data, timestamp = reader.read_next()
+        message = deserialize_message(data, classes[topic])
+        if hasattr(message, 'header'):
+            timestamp = stamp_ns(message.header.stamp)
+        writer.write(topic, data, timestamp)
+        count += 1
+    del writer
+    return count
 
-def main(argv):
 
-    inputfile = ''
-    outputfile = ''
-
-    # parse arguments
-    try:
-        opts, args = getopt.getopt(argv,"hi:o:",["ifile=","ofile="])
-    except getopt.GetoptError:
-        print 'usage: restamp_bag.py -i <inputfile> -o <outputfile>'
-        sys.exit(2)
-    for opt, arg in opts:
-        if opt == '-h':
-            print 'usage: python restamp_bag.py -i <inputfile> -o <outputfile>'
-            sys.exit()
-        elif opt in ("-i", "--ifile"):
-            inputfile = arg
-        elif opt in ("-o", "--ofile"):
-            outputfile = arg
-
-    # print console header
-    print ""
-    print "restamp_bag"
-    print ""
-    print 'input file:  ', inputfile
-    print 'output file: ', outputfile
-    print ""
-    print "starting restamping (may take a while)"
-    print ""
-
-    outbag = rosbag.Bag(outputfile, 'w')
-    messageCounter = 0
-    kPrintDotReductionFactor = 1000
-
-    try:
-        for topic, msg, t in rosbag.Bag(inputfile).read_messages():
-
-            # Write message in output bag with input message header stamp
-            outbag.write(topic, msg, msg.header.stamp)
-
-            if (messageCounter % kPrintDotReductionFactor) == 0:
-                    #print '.',
-                    sys.stdout.write('.')
-                    sys.stdout.flush()
-            messageCounter = messageCounter + 1
-
-    # print console footer
-    finally:
-        print ""
-        print ""
-        print "finished iterating through input bag"
-        print "output bag written"
-        print ""
-        outbag.close()
-
-if __name__ == "__main__":
-   main(sys.argv[1:])
-
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('-i', '--ifile', required=True)
+    parser.add_argument('-o', '--ofile', required=True)
+    parser.add_argument('--storage', choices=['mcap', 'sqlite3'], default='mcap')
+    args = parser.parse_args()
+    print((restamp(args.ifile, args.ofile, args.storage)))

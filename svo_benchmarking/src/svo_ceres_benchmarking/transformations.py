@@ -166,7 +166,7 @@ True
 
 """
 
-from __future__ import division
+
 
 import warnings
 import math
@@ -179,23 +179,23 @@ __docformat__ = "restructuredtext en"
 def skew(v):
     """Returns the skew-symmetric matrix of a vector
     cfo, 2015/08/13
-    
+
     """
     return numpy.array([[0, -v[2], v[1]],
                         [v[2], 0, -v[0]],
                         [-v[1], v[0], 0]], dtype=numpy.float64)
-                    
+
 def unskew(R):
     """Returns the coordinates of a skew-symmetric matrix
     cfo, 2015/08/13
-       
+
     """
     return numpy.array([R[2,1], R[0,2], R[1,0]], dtype=numpy.float64)
-    
+
 def first_order_rotation(rotvec):
     """First order approximation of a rotation: I + skew(rotvec)
     cfo, 2015/08/13
-    
+
     """
     R = numpy.zeros((3,3), dtype=numpy.float64)
     R[0,0] = 1.0
@@ -214,7 +214,7 @@ def axis_angle(axis, theta):
     Returns 3x3 Matrix.
     Is the same as transformations.rotation_matrix(theta, axis).
     cfo, 2015/08/13
-    
+
     """
     if theta*theta > _EPS:
         wx = axis[0]; wy = axis[1]; wz = axis[2]
@@ -242,12 +242,12 @@ def axis_angle(axis, theta):
         return R
     else:
         return first_order_rotation(axis*theta)
-    
+
 def expmap_so3(rotvec):
     """Exponential map at identity.
     Create a rotation from canonical coordinates using Rodrigues' formula.
     cfo, 2015/08/13
-       
+
     """
     theta = numpy.linalg.norm(rotvec)
     axis = rotvec/theta
@@ -257,19 +257,19 @@ def logmap_so3(R):
     """Logmap at the identity.
     Returns canonical coordinates of rotation.
     cfo, 2015/08/13
-       
-    """   
+
+    """
     R11 = R[0, 0]; R12 = R[0, 1]; R13 = R[0, 2]
     R21 = R[1, 0]; R22 = R[1, 1]; R23 = R[1, 2]
     R31 = R[2, 0]; R32 = R[2, 1]; R33 = R[2, 2]
     tr = numpy.trace(R)
     omega = numpy.empty((3,), dtype=numpy.float64)
-    
-    # when trace == -1, i.e., when theta = +-pi, +-3pi, +-5pi, we do something 
+
+    # when trace == -1, i.e., when theta = +-pi, +-3pi, +-5pi, we do something
     # special
     if(numpy.abs(tr + 1.0) < 1e-10):
         if(numpy.abs(R33 + 1.0) > 1e-10):
-            omega = (numpy.pi / numpy.sqrt(2.0 + 2.0 * R33)) * numpy.array([R13, R23, 1.0+R33])        
+            omega = (numpy.pi / numpy.sqrt(2.0 + 2.0 * R33)) * numpy.array([R13, R23, 1.0+R33])
         elif(numpy.abs(R22 + 1.0) > 1e-10):
             omega = (numpy.pi / numpy.sqrt(2.0 + 2.0 * R22)) * numpy.array([R12, 1.0+R22, R32])
         else:
@@ -284,25 +284,25 @@ def logmap_so3(R):
             # when theta near 0, +-2pi, +-4pi, etc. (trace near 3.0)
             # use Taylor expansion: theta \approx 1/2-(t-3)/12 + O((t-3)^2)
             magnitude = 0.5 - tr_3 * tr_3 / 12.0;
-            
+
         omega = magnitude * numpy.array([R32 - R23, R13 - R31, R21 - R12])
-        
+
     return omega
 
-    
+
 def right_jacobian_so3(rotvec):
     """Right Jacobian for Exponential map in SO(3)
     Equation (10.86) and following equations in G.S. Chirikjian, "Stochastic
     Models, Information Theory, and Lie Groups", Volume 2, 2008.
-    
+
     > expmap_so3(thetahat + omega) \approx expmap_so3(thetahat) * expmap_so3(Jr * omega)
     where Jr = right_jacobian_so3(thetahat);
     This maps a perturbation in the tangent space (omega) to a perturbation
     on the manifold (expmap_so3(Jr * omega))
     cfo, 2015/08/13
-   
+
     """
-   
+
     theta2 = numpy.dot(rotvec, rotvec)
     if theta2 <= _EPS:
         return numpy.identity(3, dtype=numpy.float64)
@@ -318,7 +318,7 @@ def S_inv_eulerZYX_body(euler_coordinates):
     dot(euler) = S^-1(euler_coordinates) * omega
     Also called: rotation-rate matrix. (E in Lupton paper)
     cfo, 2015/08/13
-    
+
     """
     y = euler_coordinates[1]
     z = euler_coordinates[2]
@@ -331,17 +331,17 @@ def S_inv_eulerZYX_body(euler_coordinates):
     E[2,1] = numpy.sin(z)*numpy.sin(y)/numpy.cos(y)
     E[2,2] = numpy.cos(z)*numpy.sin(y)/numpy.cos(y)
     return E
-    
+
 def S_inv_eulerZYX_body_deriv(euler_coordinates, omega):
     """ Compute dE(euler_coordinates)*omega/deuler_coordinates
-        cfo, 2015/08/13 
-        
+        cfo, 2015/08/13
+
     """
-    
+
     y = euler_coordinates[1]
     z = euler_coordinates[2]
-    
-   
+
+
     """
     w1 = omega[0]; w2 = omega[1]; w3 = omega[2]
     J = numpy.zeros((3,3))
@@ -354,20 +354,20 @@ def S_inv_eulerZYX_body_deriv(euler_coordinates, omega):
     J[2,0] = w1
     J[2,1] = 1.0/math.cos(y)**2 * (w2 * math.sin(z) + w3 * math.cos(z))
     J[2,2] = w2*math.tan(y)*math.cos(z) - w3*math.tan(y)*math.sin(z)
-   
+
     """
-    
+
     #second version, x = psi, y = theta, z = phi
     # J_x = numpy.zeros((3,3))
     J_y = numpy.zeros((3,3))
     J_z = numpy.zeros((3,3))
-    
+
     # dE^-1/dtheta
     J_y[0,1] = math.tan(y)/math.cos(y)*math.sin(z)
     J_y[0,2] = math.tan(y)/math.cos(y)*math.cos(z)
     J_y[2,1] = math.sin(z)/(math.cos(y))**2
     J_y[2,2] = math.cos(z)/(math.cos(y))**2
-    
+
     # dE^-1/dphi
     J_z[0,1] = math.cos(z)/math.cos(y)
     J_z[0,2] = -math.sin(z)/math.cos(y)
@@ -375,13 +375,13 @@ def S_inv_eulerZYX_body_deriv(euler_coordinates, omega):
     J_z[1,2] = -math.cos(z)
     J_z[2,1] = math.cos(z)*math.tan(y)
     J_z[2,2] = -math.sin(z)*math.tan(y)
-    
+
     J = numpy.zeros((3,3))
     J[:,1] = numpy.dot(J_y, omega)
     J[:,2] = numpy.dot(J_z, omega)
 
     return J
-    
+
 
 def identity_matrix():
     """Return 4x4 identity/unit matrix.
@@ -1382,7 +1382,7 @@ def quaternion_about_axis(angle, axis):
 
 def matrix_from_quaternion(quaternion):
     return quaternion_matrix(quaternion)
-    
+
 def quaternion_matrix(quaternion):
     """Return homogeneous rotation matrix from quaternion.
 
@@ -1407,16 +1407,16 @@ def quaternion_matrix(quaternion):
 def quaternionJPL_matrix(quaternion):
     """Return homogeneous rotation matrix from quaternion in JPL notation.
        quaternion = [x y z w]
-    """    
+    """
     q0 = quaternion[0]
     q1 = quaternion[1]
     q2 = quaternion[2]
-    q3 = quaternion[3]    
+    q3 = quaternion[3]
     return numpy.array([
         [ q0**2 - q1**2 - q2**2 + q3**2, 2.0*q0*q1 + 2.0*q2*q3, 2.0*q0*q2 - 2.0*q1*q3, 0],
         [ 2.0*q0*q1 - 2.0*q2*q3, - q0**2 + q1**2 - q2**2 + q3**2, 2.0*q0*q3 + 2.0*q1*q2, 0],
         [ 2.0*q0*q2 + 2.0*q1*q3, 2.0*q1*q2 - 2.0*q0*q3, - q0**2 - q1**2 + q2**2 + q3**2, 0],
-        [0, 0, 0, 1.0]], dtype=numpy.float64)        
+        [0, 0, 0, 1.0]], dtype=numpy.float64)
 
 def quaternion_from_matrix(matrix):
     """Return quaternion from rotation matrix.
@@ -1764,7 +1764,7 @@ _AXES2TUPLE = {
     'rzxy': (1, 1, 0, 1), 'ryxy': (1, 1, 1, 1), 'ryxz': (2, 0, 0, 1),
     'rzxz': (2, 0, 1, 1), 'rxyz': (2, 1, 0, 1), 'rzyz': (2, 1, 1, 1)}
 
-_TUPLE2AXES = dict((v, k) for k, v in _AXES2TUPLE.items())
+_TUPLE2AXES = dict((v, k) for k, v in list(_AXES2TUPLE.items()))
 
 # helper functions
 

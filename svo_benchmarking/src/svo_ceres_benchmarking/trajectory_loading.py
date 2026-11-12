@@ -1,11 +1,11 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 """
 @author: Christian Forster
 """
 
 import os
 import numpy as np
-import trajectory_utils
+from . import trajectory_utils
 
 
 def read_nanosecond_timestamps_from_csv_file(filename, col=0, delimiter=','):
@@ -30,7 +30,7 @@ def load_hand_eye_calib(params):
 
 
 def load_dataset_csv(results_dir):
-    print('loading csv dataset in '+results_dir)
+    print(('loading csv dataset in '+results_dir))
 
     filename_es = os.path.join(results_dir, 'traj_estimate.txt')
     filename_gt = os.path.join(results_dir, 'groundtruth.csv')

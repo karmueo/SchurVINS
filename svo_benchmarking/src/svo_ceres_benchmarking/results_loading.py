@@ -1,4 +1,4 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 
 import os
 import yaml
@@ -10,7 +10,7 @@ def get_num_monte_carlo(trace_dir):
     exp_param_fn = os.path.join(trace_dir, "experiment.yaml")
     assert os.path.exists(exp_param_fn),\
         "{0} does not exist".format(exp_param_fn)
-    exp_params = yaml.load(open(exp_param_fn, 'r'))
+    exp_params = yaml.safe_load(open(exp_param_fn, 'r'))
     assert 'num_monte_carlo_runs' in exp_params
     return exp_params['num_monte_carlo_runs']
 
@@ -38,7 +38,7 @@ def load_traj_est(results_dir, mc_idx=None):
     '''
     format: id time_sec x y z qx qy qz qw
     '''
-    print('loading trajectory estimate in '+results_dir)
+    print(('loading trajectory estimate in '+results_dir))
 
     if mc_idx is not None:
         data_es = np.loadtxt(
@@ -66,7 +66,7 @@ def load_speed_bias_estimate(results_dir, mc_idx=None):
     '''
     format: id time_sec vx vy vz gyr_bx gyr_by gyr_bz acc_bx acc_by acc_bz
     '''
-    print("loading speed and bias estimate in " + results_dir)
+    print(("loading speed and bias estimate in " + results_dir))
     if mc_idx is not None:
         data_es = np.loadtxt(
             os.path.join(results_dir, 'speed_bias_estimate' +
@@ -102,12 +102,12 @@ def load_status(results_dir, mc_idx=None):
     else:
         abs_fn = os.path.join(results_dir, 'status.txt')
 
-    print("Loading status from {0}.".format(abs_fn))
+    print(("Loading status from {0}.".format(abs_fn)))
 
     with open(abs_fn) as f:
         contents = f.readlines()
 
-    contents = [x.strip().split(' ') 
+    contents = [x.strip().split(' ')
                 for x in contents if not x.startswith('#')]
     es_id = []
     es_t_sec = []
@@ -128,7 +128,7 @@ def load_traj_est_gt_matched(results_dir, mc_idx=None):
     '''
     format: id time_sec x y z qx qy qz qw
     '''
-    print('loading matched trajectory and groundtruth in '+results_dir)
+    print(('loading matched trajectory and groundtruth in '+results_dir))
 
     if mc_idx is not None:
         data_es = np.loadtxt(

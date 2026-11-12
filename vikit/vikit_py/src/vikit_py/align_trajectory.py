@@ -1,25 +1,25 @@
-#!/usr/bin/python
+#!/usr/bin/env python3
 
 import numpy as np
 import vikit_py.rotation_utils as ru
 
 def align_sim3(model, data):
-    """Implementation of the paper: S. Umeyama, Least-Squares Estimation 
+    """Implementation of the paper: S. Umeyama, Least-Squares Estimation
     of Transformation Parameters Between Two Point Patterns,
     IEEE Trans. Pattern Anal. Mach. Intell., vol. 13, no. 4, 1991.
 
     Input:
     model -- first trajectory (nx3), numpy array type
     data -- second trajectory (nx3), numpy array type
-    
+
     Output:
     s -- scale factor (scalar)
     R -- rotation matrix (3x3)
     t -- translation vector (3x1)
     such that:  model = s * R * data + t
-    
+
     t_error -- translational error per point (1xn)
-    
+
     """
     # substract mean
     mu_M = model.mean(0)
@@ -51,25 +51,25 @@ def align_sim3(model, data):
     return s, R, t #, t_error
 
 def align_se3(model,data):
-    """Align two trajectories using the method of Horn (closed-form). 
-        
+    """Align two trajectories using the method of Horn (closed-form).
+
     Input:
     model -- first trajectory (nx3), numpy array type
     data -- second trajectory (nx3), numpy array type
-    
+
     Output:
     R -- rotation matrix (3x3)
     t -- translation vector (3x1)
-    such that:  model = R * data + t    
-    
-    
+    such that:  model = R * data + t
+
+
     """
     np.set_printoptions(precision=3,suppress=True)
     mu_M = model.mean(0)
     mu_D = data.mean(0)
     model_zerocentered = model - mu_M
     data_zerocentered = data - mu_D
-    
+
     W = np.zeros( (3,3) )
     for row in range(data.shape[0]):
         W += np.outer(data_zerocentered[row,:],model_zerocentered[row,:])
@@ -79,9 +79,9 @@ def align_se3(model,data):
         S[2,2] = -1
     R = U*S*Vh
     t = mu_M - np.dot(R, mu_D)
-    
+
     #model_aligned = np.transpose(np.dot(R, np.transpose(model)) + np.transpose(t))
-  
+
     return R, t
 
 def _matrix_log(A):
@@ -97,7 +97,7 @@ def hand_eye_calib(q_gt, q_es, I=[], p_gt=[], p_es=[], delta=1, verbose=True):
     """
     estimate_translation_offset = (len(p_es) != 0)
     if len(I) == 0:
-        I = range(0,len(q_gt))
+        I = list(range(0,len(q_gt)))
     n = len(I)
     M = np.zeros([3,3])
     C = np.zeros([3*n, 3])
@@ -118,7 +118,7 @@ def hand_eye_calib(q_gt, q_es, I=[], p_gt=[], p_es=[], delta=1, verbose=True):
           b_A[3*ix:3*ix+3,0] = np.dot(np.transpose(A1), p_es[i+delta,:]-p_es[i,:])
           b_B[3*ix:3*ix+3,0] = np.dot(np.transpose(B1), p_gt[i+delta,:]-p_gt[i,:])
 
-    # compute rotation  
+    # compute rotation
     D,V = np.linalg.linalg.eig(np.dot(M.transpose(), M))
     Lambda = np.diag([np.sqrt(1.0/D[0]), np.sqrt(1.0/D[1]), np.sqrt(1.0/D[2])])
     Vinv = np.linalg.linalg.inv(V)
@@ -129,7 +129,7 @@ def hand_eye_calib(q_gt, q_es, I=[], p_gt=[], p_es=[], delta=1, verbose=True):
         d = np.zeros([3*n,1])
         for i in range(n):
             d[3*i:3*i+3,:] = b_A[3*i:3*i+3,:] - np.dot(X, b_B[3*i:3*i+3,:])
-    
+
         b = np.dot(np.linalg.inv(np.dot(np.transpose(C),C)),  np.dot(np.transpose(C),d))
 
         return np.array(X), b

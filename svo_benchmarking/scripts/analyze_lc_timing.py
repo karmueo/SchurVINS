@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
 import os
@@ -30,9 +30,9 @@ if __name__ == '__main__':
     assert os.path.exists(nqueris_fn)
 
     print("Going to analyze:")
-    print('- {0}'.format(lc_fn))
-    print('- {0}'.format(pg_fn))
-    print('- {0}'.format(nqueris_fn))
+    print(('- {0}'.format(lc_fn)))
+    print(('- {0}'.format(pg_fn)))
+    print(('- {0}'.format(nqueris_fn)))
 
     lc_data = np.loadtxt(lc_fn)
     pg_data = np.loadtxt(pg_fn)
@@ -42,7 +42,7 @@ if __name__ == '__main__':
     n_frames = nqueris_data.size
     assert total_queries == lc_data.shape[0]
     assert lc_data.shape[1] == 4
-    print("Find query data for {0} keyframes.".format(n_frames))
+    print(("Find query data for {0} keyframes.".format(n_frames)))
 
     t_bow = lc_data[:, 0]
     t_gveri = lc_data[:, 1]
@@ -76,8 +76,8 @@ if __name__ == '__main__':
 
     suc_detect_idx = np.nonzero(t_ume_kf)[0]
     suc_closure_idx = np.nonzero(t_trans_kf)[0]
-    print("{0} success detections and {1} closures.".format(
-        suc_detect_idx.size, suc_closure_idx.size))
+    print(("{0} success detections and {1} closures.".format(
+        suc_detect_idx.size, suc_closure_idx.size)))
     fig = plt.figure(figsize=(12, 8))
     ax = fig.add_subplot(411, ylabel='Time (s)')
     ax.plot(t_bow_kf, label='BoW Check')
@@ -118,7 +118,7 @@ if __name__ == '__main__':
     print("VIO transformation timing stats:")
     print(t_suc_trans_kf)
     print(stats_trans_vio)
-    print("Average total time of all selected keyframes: {0}".format(
-        np.mean(t_total_kf)))
-    print("Average detection time of all selected keyframes: {0}".format(
-        np.mean(t_sum2_kf)))
+    print(("Average total time of all selected keyframes: {0}".format(
+        np.mean(t_total_kf))))
+    print(("Average detection time of all selected keyframes: {0}".format(
+        np.mean(t_sum2_kf))))

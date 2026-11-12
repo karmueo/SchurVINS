@@ -1,8 +1,8 @@
-#!/usr/bin/python
+#!/usr/bin/env python3
 
 import argparse
 import os
-import rospkg
+from ament_index_python.packages import get_package_share_directory
 import shutil
 
 
@@ -21,28 +21,28 @@ if __name__ == '__main__':
                         action='store_true')
     args = parser.parse_args()
 
-    results_top = os.path.join(rospkg.RosPack().get_path(
+    results_top = os.path.join(get_package_share_directory(
         'svo_benchmarking'), 'results')
-    print("Top directory for results is {0}".format(results_top))
+    print(("Top directory for results is {0}".format(results_top)))
 
     results_from = os.path.join(results_top, args.results_dir)
     assert os.path.isdir(results_from), \
         "Specified results_dir does not exist {0}".format(results_from)
-    print("Will organize results from {0}".format(results_from))
+    print(("Will organize results from {0}".format(results_from)))
 
     results_to = os.path.join(results_top, args.platform+'/'+args.config)
     if os.path.isdir(results_to):
         print("Target directory already exists, possible to overwrite.")
     else:
         os.makedirs(results_to)
-    print("The target folder is {0}".format(results_to))
+    print(("The target folder is {0}".format(results_to)))
 
     prefix = args.platform + '_' + args.config + '_'
 
     dataset_names = [d for d in os.listdir(results_from)
                      if os.path.isdir(os.path.join(results_from, d))]
     dataset_names.sort()
-    print("Found datasets: {0}".format(dataset_names))
+    print(("Found datasets: {0}".format(dataset_names)))
 
     for d in dataset_names:
         from_d = os.path.join(results_from, d)
@@ -55,7 +55,7 @@ if __name__ == '__main__':
         if args.success_flag and not os.path.isfile(suc_flag):
             os.mknod(suc_flag)
 
-        print("{0} -> {1}".format(from_d, to_d))
+        print(("{0} -> {1}".format(from_d, to_d)))
         for f in os.listdir(from_d):
             if not os.path.isfile(os.path.join(from_d, f)):
                 continue

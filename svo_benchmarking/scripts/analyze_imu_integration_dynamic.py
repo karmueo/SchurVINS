@@ -1,4 +1,4 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 
 import argparse
 import os
@@ -54,7 +54,7 @@ def align_est_and_calculate_ATE(es_p, es_q, gt_p, gt_q):
     T_est0 = es_T[0]
     T_gt0 = gt_T[0]
     align_T = np.dot(T_gt0, np.linalg.inv(T_est0))
-    print("The alignment transformation is:\n{0}.".format(align_T))
+    print(("The alignment transformation is:\n{0}.".format(align_T)))
     aligned_es_T = [np.dot(align_T, v) for v in es_T]
     aligned_es_p = np.array([v[0:3, 3] for v in aligned_es_T])
     aligned_es_q = np.array([tu.dcm2quat(v[0:3, 0:3]) for v in aligned_es_T])
@@ -78,22 +78,22 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     assert os.path.exists(args.trace_dir)
-    print("Going to analyze trace in {0} from {1} to {2}".format(
-        args.trace_dir, args.start_id, args.end_id))
-    print("The time duration is set to {0} seconds".format(args.duration))
+    print(("Going to analyze trace in {0} from {1} to {2}".format(
+        args.trace_dir, args.start_id, args.end_id)))
+    print(("The time duration is set to {0} seconds".format(args.duration)))
     unique_folder_name = '_'.join(
         [str(args.start_id), str(args.end_id), str(args.duration),
          'analyze_imu_integration_dyn'])
     save_dir = os.path.join(args.trace_dir, "eval_res", unique_folder_name)
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
-    print("The results/plots will be written to {0}.".format(save_dir))
+    print(("The results/plots will be written to {0}.".format(save_dir)))
 
     n_trials = res_load.get_num_monte_carlo(args.trace_dir)
     mc_indices = np.arange(n_trials)
-    print("Number of monte-carlo runs is {0}.".format(n_trials))
+    print(("Number of monte-carlo runs is {0}.".format(n_trials)))
 
-    print(Fore.GREEN + "> Loading estimate...")
+    print((Fore.GREEN + "> Loading estimate..."))
     print("monte-carlo results...")
     es_p_mc, es_q_mc, gt_p_mc, gt_q_mc = load_est_gt_mc(args.trace_dir,
                                                         mc_indices)
@@ -127,14 +127,14 @@ if __name__ == "__main__":
     gt_q = gt_q[valid_es_entries]
     gt_R = [tfs.quaternion_matrix(v)[0:3, 0:3] for v in gt_q]
 
-    print("Extact estimate range from {0} to {1}".format(es_id[0],
-                                                         es_id[-1]))
+    print(("Extact estimate range from {0} to {1}".format(es_id[0],
+                                                         es_id[-1])))
 
-    print(Fore.GREEN + "> Loading dataset...")
+    print((Fore.GREEN + "> Loading dataset..."))
     # load and get corresponding imu measurements
     imu_id, imu_time, gyr, acc = data_load.load_imu_meas(args.trace_dir)
     imu_time = imu_time - imu_time[0]
-    print("Loaded {0} IMU measurements.".format(imu_id.shape[0]))
+    print(("Loaded {0} IMU measurements.".format(imu_id.shape[0])))
     valid_imu_entries = []
     for i, v in enumerate(imu_time):
         if v < es_t_sec[0]:
@@ -146,10 +146,10 @@ if __name__ == "__main__":
     imu_time = imu_time[valid_imu_entries]
     gyr = gyr[valid_imu_entries]
     acc = acc[valid_imu_entries]
-    print("Extract {0} IMU measurements in the estimate range.".format(
-        imu_id.shape[0]))
+    print(("Extract {0} IMU measurements in the estimate range.".format(
+        imu_id.shape[0])))
 
-    print(Fore.GREEN + '> Analyzing and plotting...')
+    print((Fore.GREEN + '> Analyzing and plotting...'))
 
     print("Monte-Carlo results...")
     aligned_es_p_mc = []

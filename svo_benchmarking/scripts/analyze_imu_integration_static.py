@@ -1,4 +1,4 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 
 import argparse
 import yaml
@@ -77,22 +77,22 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     assert os.path.exists(args.trace_dir)
-    print("Going to analyze trace in {0} from {1} to {2}".format(
-        args.trace_dir, args.start_id, args.end_id))
-    print("The time duration is set to {0} seconds".format(args.duration))
+    print(("Going to analyze trace in {0} from {1} to {2}".format(
+        args.trace_dir, args.start_id, args.end_id)))
+    print(("The time duration is set to {0} seconds".format(args.duration)))
     unique_folder_name = '_'.join(
         [str(args.start_id), str(args.end_id), str(args.duration),
          'analyze_imu_integration'])
     save_dir = os.path.join(args.trace_dir, "eval_res", unique_folder_name)
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
-    print("The results/plots will be written to {0}.".format(save_dir))
+    print(("The results/plots will be written to {0}.".format(save_dir)))
 
     n_trials = res_load.get_num_monte_carlo(args.trace_dir)
     mc_indices = np.arange(n_trials)
-    print("Number of monte-carlo runs is {0}.".format(n_trials))
+    print(("Number of monte-carlo runs is {0}.".format(n_trials)))
 
-    print(Fore.GREEN + "> Loading estimate...")
+    print((Fore.GREEN + "> Loading estimate..."))
     print("monte-carlo results...")
     _, _, es_p_mc, _ = load_estimate_mc(args.trace_dir, mc_indices)
     print("Single trial...")
@@ -117,14 +117,14 @@ if __name__ == "__main__":
     es_gyr_bias = es_gyr_bias[valid_es_entries]
     es_acc_bias = es_acc_bias[valid_es_entries]
 
-    print("Extact estimate range from {0} to {1}".format(es_id[0],
-                                                         es_id[-1]))
+    print(("Extact estimate range from {0} to {1}".format(es_id[0],
+                                                         es_id[-1])))
 
-    print(Fore.GREEN + "> Loading dataset...")
+    print((Fore.GREEN + "> Loading dataset..."))
     # load and get corresponding imu measurements
     imu_id, imu_time, gyr, acc = data_load.load_imu_meas(args.trace_dir)
     imu_time = imu_time - imu_time[0]
-    print("Loaded {0} IMU measurements.".format(imu_id.shape[0]))
+    print(("Loaded {0} IMU measurements.".format(imu_id.shape[0])))
     valid_imu_entries = []
     for i, v in enumerate(imu_time):
         if v < es_t_sec[0]:
@@ -136,10 +136,10 @@ if __name__ == "__main__":
     imu_time = imu_time[valid_imu_entries]
     gyr = gyr[valid_imu_entries]
     acc = acc[valid_imu_entries]
-    print("Extract {0} IMU measurements in the estimate range.".format(
-        imu_id.shape[0]))
+    print(("Extract {0} IMU measurements in the estimate range.".format(
+        imu_id.shape[0])))
 
-    print(Fore.GREEN + '> Analyzing and plotting...')
+    print((Fore.GREEN + '> Analyzing and plotting...'))
 
     print("Position estimate for all monte-carlo trials...")
     p_es_diff_mc = []
@@ -180,7 +180,7 @@ if __name__ == "__main__":
     ax.plot(es_t_sec, es_p[:, 2])
     ax = fig.add_subplot(414, xlabel='t (sec)', ylabel='drift (m)')
     ax.plot(es_t_sec, p_es_dist)
-    print("The final drift is {0} meter.".format(p_es_dist[-1]))
+    print(("The final drift is {0} meter.".format(p_es_dist[-1])))
     fig.savefig(save_dir+'/position_estimate'+FORMAT)
 
     print("Orientation estimation for one trial...")

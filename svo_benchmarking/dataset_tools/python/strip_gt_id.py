@@ -1,4 +1,4 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 
 import os
 import argparse
@@ -11,11 +11,11 @@ def strip_gt_id_and_save(id_stamp_gt_fn):
     outfn = os.path.join(outdir,
                          'stamped_' + os.path.basename(id_stamp_gt_fn))
 
-    print("Going to strip id from {0} and write to {1}".format(
-        id_stamp_gt_fn, outfn))
+    print(("Going to strip id from {0} and write to {1}".format(
+        id_stamp_gt_fn, outfn)))
 
     id_stamp_gt = np.loadtxt(id_stamp_gt_fn)
-    print("Found {0} groundtruth data".format(id_stamp_gt.shape[0]))
+    print(("Found {0} groundtruth data".format(id_stamp_gt.shape[0])))
 
     stamp_gt = []
     for v in id_stamp_gt.tolist():
@@ -23,7 +23,7 @@ def strip_gt_id_and_save(id_stamp_gt_fn):
         stamp_gt.append(stamped_v)
 
     np.savetxt(outfn, stamp_gt, header='time x y z qx qy qz qw')
-    print("Written {0} stamped groundtruth.".format(len(stamp_gt)))
+    print(("Written {0} stamped groundtruth.".format(len(stamp_gt))))
 
 
 if __name__ == '__main__':

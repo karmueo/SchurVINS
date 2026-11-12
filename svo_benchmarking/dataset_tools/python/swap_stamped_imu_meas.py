@@ -1,4 +1,4 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 
 import os
 import argparse
@@ -17,12 +17,12 @@ if __name__ == '__main__':
     outfn = os.path.join(outdir,
                          'swapped_' + os.path.basename(args.org_imu))
 
-    print("Going to swap Acc and Gyr from {0} to {1}".format(
-        args.org_imu, outfn))
+    print(("Going to swap Acc and Gyr from {0} to {1}".format(
+        args.org_imu, outfn)))
 
     org_values = np.loadtxt(args.org_imu)
     assert org_values.shape[1] == 7
-    print("Read {0} IMU values.".format(org_values.shape[0]))
+    print(("Read {0} IMU values.".format(org_values.shape[0])))
 
     swapped_values = np.zeros(org_values.shape)
 

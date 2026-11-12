@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
 import os
@@ -43,11 +43,11 @@ if __name__ == '__main__':
 
     stats = {}
     print("Statistics:")
-    for k, v in trace.iteritems():
+    for k, v in trace.items():
         d = trace[k] = np.array(trace[k])
         stats[k] = {}
-        print("- {0}: {1}, {2}, {3} - {4}".format(k, np.mean(d), np.median(d),
-                                                  np.min(d), np.max(d)))
+        print(("- {0}: {1}, {2}, {3} - {4}".format(k, np.mean(d), np.median(d),
+                                                  np.min(d), np.max(d))))
         stats[k]['mean'] = np.mean(d)
         stats[k]['median'] = np.median(d)
         stats[k]['min'] = np.min(d)

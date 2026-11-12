@@ -1,9 +1,9 @@
-#!/usr/bin/python2
+#!/usr/bin/env python3
 """
 @author: Jonathan Huber
 
 @brief: combine two image lists of stereo pair to format, which can be used
-by benchmark_node_with_ceres. Will append each image in images_1.txt to 
+by benchmark_node_with_ceres. Will append each image in images_1.txt to
 corresponding line in images_0.txt
 """
 
@@ -15,7 +15,7 @@ for x in lines:
     images_1.append(x.split(' ')[2])
     timestamps_1.append(x.split(' ')[1])
 f.close()
-    
+
 file_lines = []
 with open('images_0.txt', 'r') as f:
     i = 0
@@ -38,5 +38,5 @@ with open('images_0.txt', 'r') as f:
 
 with open('images_combined.txt', 'w') as f:
     f.writelines(file_lines)
-    
+
 print('Created file images_combined.txt')

@@ -1,4 +1,4 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 
 import os
 import argparse
@@ -20,14 +20,14 @@ if __name__ == '__main__':
     outfn = os.path.join(outdir,
                          'changed_' + os.path.basename(args.org_img_list))
 
-    print("Going to prepend {0} to {1} and write to {2}".format(
-        args.new_path, args.org_img_list, outfn))
+    print(("Going to prepend {0} to {1} and write to {2}".format(
+        args.new_path, args.org_img_list, outfn)))
 
     org_content = []
     with open(args.org_img_list) as f:
         org_content = f.readlines()
     org_content = [x.strip().split(' ') for x in org_content]
-    print("Found {0} data".format(len(org_content)))
+    print(("Found {0} data".format(len(org_content))))
 
     changed_content = []
     cnt = 0

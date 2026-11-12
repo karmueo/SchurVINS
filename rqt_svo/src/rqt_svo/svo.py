@@ -1,6 +1,5 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 import os
-import rospy
 import argparse
 from qt_gui.plugin import Plugin
 from .svo_widget import SvoWidget
@@ -20,7 +19,7 @@ class Svo(Plugin):
     args = self._parse_args(context.argv())
 
     # Create QWidget
-    self._widget = SvoWidget(svo_namespace=args.topic)
+    self._widget = SvoWidget(context.node, svo_namespace=args.topic)
 
     # Show _widget.windowTitle on left-top of each plugin (when
     # it's set in _widget). This is useful when you open multiple
@@ -36,8 +35,8 @@ class Svo(Plugin):
 
   def _parse_args(self, argv):
     parser = argparse.ArgumentParser()
-    parser.add_argument('--topic', help='Svo Info Topic to display')
-    args, unknown = parser.parse_known_args()
+    parser.add_argument('--topic', default='/svo', help='SVO namespace')
+    args, unknown = parser.parse_known_args(argv)
     return args
 
   # def _parse_args(self, argv):
@@ -86,3 +85,7 @@ class Svo(Plugin):
       # Comment in to signal that the plugin has a way to configure
       # This will enable a setting button (gear icon) in each dock widget title bar
       # Usually used to open a modal configuration dialog
+
+  def shutdown_plugin(self):
+    self._widget.unregister()
+    self._widget._update_info_timer.stop()

@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python3
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -17,7 +17,7 @@ def axis_equal_3d(ax):
     r = maxsize/2
     for ctr, dim in zip(centers, 'xyz'):
         getattr(ax, 'set_{}lim'.format(dim))(ctr - r, ctr + r)
-        
+
 def draw_coordinate_frame(ax, t_world_body, R_world_body, alpha=1.0):
     """draws the coordinate frame in the provided figure-axis (world coordinates)"""
     T_wf = np.zeros((3,4))
@@ -32,4 +32,4 @@ def draw_coordinate_frame(ax, t_world_body, R_world_body, alpha=1.0):
             [T_wf[2,3], T_wf[2,3]+T_wf[2,1]*line_length], color='g', alpha=alpha)
     ax.plot([T_wf[0,3], T_wf[0,3]+T_wf[0,2]*line_length],
             [T_wf[1,3], T_wf[1,3]+T_wf[1,2]*line_length],
-            [T_wf[2,3], T_wf[2,3]+T_wf[2,2]*line_length], color='b', alpha=alpha) 
+            [T_wf[2,3], T_wf[2,3]+T_wf[2,2]*line_length], color='b', alpha=alpha)

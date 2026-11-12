@@ -1,4 +1,4 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
 """
@@ -55,7 +55,7 @@ if __name__ == '__main__':
     assert(N == len(quats))
     transformed_positions = np.zeros([N, 3])
     transformed_quats = np.zeros([N, 4])
-    print('Transforming ', N, ' trajectory poses')
+    print(('Transforming ', N, ' trajectory poses'))
     for i in range(N):
         T_old = np.eye(4)
         T_old[0:3, 0:3] = quat2dcm(quats[i])

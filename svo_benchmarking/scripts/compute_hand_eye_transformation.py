@@ -1,4 +1,4 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 
 import argparse
 import os
@@ -34,16 +34,16 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     assert os.path.exists(args.trace_dir)
-    print("Going to calculate hand-eye in {0} from {1} to {2}".format(
-        args.trace_dir, args.start_id, args.end_id))
+    print(("Going to calculate hand-eye in {0} from {1} to {2}".format(
+        args.trace_dir, args.start_id, args.end_id)))
     unique_name = '_'.join(
         ['s'+str(args.start_id), 'e'+str(args.end_id), 'd'+str(args.delta)])
     save_dir = os.path.join(args.trace_dir, 'hand_eye')
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
-    print("The results/plots will be written to {0}.".format(save_dir))
+    print(("The results/plots will be written to {0}.".format(save_dir)))
 
-    print(Fore.GREEN + "> Loading estimate...")
+    print((Fore.GREEN + "> Loading estimate..."))
     # extract state estimate
     # we assume the extracted poses are of the same order
     es_id, es_t_sec, es_p, es_q, _, gt_p, gt_q =\
@@ -70,20 +70,20 @@ if __name__ == '__main__':
     gt_q = gt_q[valid_es_entries]
     gt_T = [tu.get_rigid_body_trafo(q, t) for q, t in zip(gt_q, gt_p)]
 
-    print("Extact estimate range from {0} to {1}".format(es_id[0],
-                                                         es_id[-1]))
+    print(("Extact estimate range from {0} to {1}".format(es_id[0],
+                                                         es_id[-1])))
 
     N = es_p.shape[0]
     indices = np.arange(N - args.delta)
-    print("Going to use {0} pairs from {1} to {2}.".format(
-        indices.shape[0], indices[0], indices[-1]))
+    print(("Going to use {0} pairs from {1} to {2}.".format(
+        indices.shape[0], indices[0], indices[-1])))
     R, t = hand_eye.hand_eye_calib(gt_q, es_q, gt_p, es_p, indices,
                                    args.delta)
     T_EH = np.identity(4)
     T_EH[0:3, 0:3] = R
     T_EH[0:3, 3] = np.ravel(t)
     T_HE = np.linalg.inv(T_EH)
-    print("Computed hand-eye transformation is:\n{0}.".format(T_HE))
+    print(("Computed hand-eye transformation is:\n{0}.".format(T_HE)))
 
     gt_T = [np.dot(v, T_HE) for v in gt_T]
     gt_p = np.array([T[0:3, 3] for T in gt_T])

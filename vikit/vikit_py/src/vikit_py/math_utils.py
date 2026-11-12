@@ -20,7 +20,7 @@ def skew(v):
     return np.array([[0, -v[2], v[1]],
                     [v[2], 0, -v[0]],
                     [-v[1], v[0], 0]], dtype=np.float32)
-                    
+
 def unskew(R):
     """Returns the coordinates of a skew-symmetric matrix"""
     return np.array([R[2,1], R[0,2], R[1,0]], dtype=np.float32)

@@ -1,21 +1,21 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-import rosbag
+from svo_ceres_benchmarking.rosbag2_io import read_messages, stamp_seconds, stamp_ns
 import argparse
 import os
 import numpy as np
 
 def calGTLengthFromBag(bag_fn, gt_topic):
-    bag = rosbag.Bag(bag_fn)
+    bag_uri = bag_fn
     gt_msgs = []
-    for topic, msg, t in bag.read_messages(topics=[gt_topic]):
+    for topic, msg, t in read_messages(bag_uri, topics=[gt_topic]):
         gt_msgs.append(msg)
 
     prev_seq = -1
     gt_positions = []
     for msg_i in gt_msgs:
-        seq_i = msg_i.header.seq
+        seq_i = stamp_ns(msg_i.header.stamp)
         assert seq_i > prev_seq
         prev_seq = seq_i
         pos_i = msg_i.pose.position
@@ -23,7 +23,7 @@ def calGTLengthFromBag(bag_fn, gt_topic):
     assert len(gt_positions) > 0, "Found no groundtruth messages."
 
     gt_positions = np.array(gt_positions)
-    print("Collecting {0} groundtruth positions.".format(gt_positions.shape[0]))
+    print(("Collecting {0} groundtruth positions.".format(gt_positions.shape[0])))
 
     gt_dist = np.diff(gt_positions, axis=0)
 
@@ -39,16 +39,16 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    print("Going to analyze bags under {0} for groundtruth topic {1}.".format(args.dir, args.gt_topic))
+    print(("Going to analyze bags under {0} for groundtruth topic {1}.".format(args.dir, args.gt_topic)))
 
-    bag_fns = [x for x in os.listdir(args.dir) if x.endswith('.bag')]
+    bag_fns = [x for x in os.listdir(args.dir) if x.endswith(('.mcap', '.db3'))]
     bag_fns.sort()
     bag_fullfns = [os.path.join(args.dir, v) for v in bag_fns]
-    print("Found bag files {0}.".format(bag_fullfns))
+    print(("Found bag files {0}.".format(bag_fullfns)))
 
     gt_len = []
     for bag_i in bag_fullfns:
-        print("Analyzing {0}".format(bag_i))
+        print(("Analyzing {0}".format(bag_i)))
         gt_len_i = calGTLengthFromBag(bag_i, args.gt_topic)
         gt_len.append(gt_len_i)
-        print(">>> GT {0} meters.".format(gt_len_i))
+        print((">>> GT {0} meters.".format(gt_len_i)))
