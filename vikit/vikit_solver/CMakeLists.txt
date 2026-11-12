@@ -7,7 +7,6 @@ include(SvoSetup)
 
 add_library(${PROJECT_NAME} SHARED
   src/robust_cost.cpp
-  src/elevation_map_node.cpp
 )
 svo_target(${PROJECT_NAME})
 ament_target_dependencies(${PROJECT_NAME} PUBLIC minkindr_vendor svo_cmake)

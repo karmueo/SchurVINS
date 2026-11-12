@@ -36,7 +36,7 @@ struct DepthJacobianFunctor : public aslam::common::NumDiffFunctor<2, 1>
       typename aslam::common::NumDiffFunctor<2, 1>::JacobianType* Jout) const
   {
     CHECK(camera_);
-    svo::BearingVector f_cur = T_cur_ref_ * (f_ref_ * (1.0 / inv_depth(0.0)));
+    svo::BearingVector f_cur = T_cur_ref_ * (f_ref_ * (1.0 / inv_depth(0)));
 
     Eigen::Matrix<double, 2, 3> projection_jacobian;
     auto res = camera_->project3(f_cur, &px_cur, &projection_jacobian);
@@ -80,7 +80,7 @@ TEST(TestDepthEstimation, testBearing)
   svo::BearingVector f_cur_2 = T_cur_ref * (f_ref * (1.0 / inv_depth));
   std::cout << f_cur_1.transpose() << std::endl;
   std::cout << f_cur_2.transpose() << std::endl;
-  EIGEN_MATRIX_EQUAL(f_cur_1, f_cur_2); // TODO(cfo) Check doesn't work!??
+  EXPECT_TRUE(EIGEN_MATRIX_NEAR(f_cur_1.normalized(), f_cur_2.normalized(), 1e-12));
 }
 
 TEST(TestDepthEstimation, DISABLED_testDataset)

@@ -8,6 +8,9 @@
 #include "vikit/cameras/omni_geometry.h"
 
 #include <gtest/gtest.h>
+#include <filesystem>
+#include <unistd.h>
+#include <opencv2/imgcodecs.hpp>
 
 #include <aslam/common/entrypoint.h>
 #include <aslam/common/numdiff-jacobian-tester.h>
@@ -18,13 +21,20 @@ class CamerasTest: public ::testing::Test
 protected:
   virtual void SetUp()
   {
-    data_dir_ = vk::path_utils::getBaseName(__FILE__) + "/data";
+    const auto source = std::filesystem::path(vk::path_utils::getBaseName(__FILE__)) / "data";
+    const auto fixtures = std::filesystem::temp_directory_path() /
+                          ("vikit_cameras_test_" + std::to_string(getpid()));
+    std::filesystem::create_directories(fixtures);
+    std::filesystem::copy(source, fixtures, std::filesystem::copy_options::overwrite_existing);
+    ASSERT_TRUE(cv::imwrite((fixtures / "test_mask.png").string(),
+                           cv::Mat(480,752,CV_8UC1,cv::Scalar(255))));
+    data_dir_ = fixtures.string();
     omni_cam_ = vk::cameras::CameraGeometryBase::loadFromYaml(data_dir_+"/calib_omni.yaml");
     CHECK(!data_dir_.empty()) << "Fail to extract data directory.";
     CHECK(omni_cam_) << "Fail to load omni cameras";
   }
 
-  // virtual void TearDown();
+  void TearDown() override { std::filesystem::remove_all(data_dir_); }
 
   std::string data_dir_;
   vk::cameras::CameraGeometryBase::Ptr omni_cam_;

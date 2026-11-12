@@ -1,1 +1,7 @@
 .vscode/
+
+/log/
+/build*/
+/install*/
+/results/
+/logs/

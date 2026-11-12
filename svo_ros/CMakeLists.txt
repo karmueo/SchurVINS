@@ -1,73 +1,42 @@
+cmake_minimum_required(VERSION 3.22)
 project(svo_ros)
-cmake_minimum_required(VERSION 2.8.3)
-
-find_package(catkin_simple REQUIRED)
-find_package(rostest REQUIRED)
-catkin_simple()
-set(OpenCV_DIR /usr/share/OpenCV)
-find_package(OpenCV REQUIRED)
-
-if(${OpenCV_VERSION} STREQUAL "3.2.0")
-  message(STATUS "OpenCV version ${OpenCV_VERSION}")
-else()
-  message(WARNING "OpenCV version ${OpenCV_VERSION}, OpenCV version must be 3.2.0")
-endif()
-
-set(USE_GTSAM false)
+find_package(ament_cmake REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(rclcpp_components REQUIRED)
+find_package(ament_index_cpp REQUIRED)
+find_package(cv_bridge REQUIRED)
+find_package(sensor_msgs REQUIRED)
+find_package(geometry_msgs REQUIRED)
+find_package(nav_msgs REQUIRED)
+find_package(std_msgs REQUIRED)
+find_package(visualization_msgs REQUIRED)
+find_package(tf2_ros REQUIRED)
+find_package(pcl_conversions REQUIRED)
+find_package(svo_msgs REQUIRED)
+find_package(svo REQUIRED)
+find_package(svo_cmake REQUIRED)
+find_package(svo_ceres_backend REQUIRED)
+find_package(svo_online_loopclosing REQUIRED)
+find_package(svo_global_map REQUIRED)
+find_package(vikit_ros REQUIRED)
+find_package(rpg_common REQUIRED)
 include(SvoSetup)
-if(USE_GLOBAL_MAP OR USE_GTSAM)
-  find_package(GTSAMCMakeTools REQUIRED)
-  find_package(GTSAM REQUIRED)
-  set(GTSAM_LIBRARIES "gtsam")
-endif()
-message(STATUS "GTSAM include dir: ${GTSAM_INCLUDE_DIR}")
-message(STATUS "GTSAM library: ${GTSAM_LIBRARIES}")
-include_directories(${GTSAM_INCLUDE_DIR})
-
-
-set(HEADERS
-  include/svo_ros/svo_interface.h
-  include/svo_ros/svo_factory.h
-  include/svo_ros/visualizer.h
-  include/svo_ros/svo_nodelet.h
-  include/svo_ros/csv_dataset_reader.h
-  include/svo_ros/ceres_backend_factory.h
-)
-
-set(SOURCES
-  src/ceres_backend_factory.cpp
-  src/svo_interface.cpp
-  src/svo_factory.cpp
-  src/svo_node_base.cpp
-  src/visualizer.cpp
-  src/csv_dataset_reader.cpp
-)
-
-# not used anymore
-if(USE_GTSAM)
-    ADD_DEFINITIONS(-DSVO_USE_GTSAM_BACKEND)
-    list(APPEND HEADERS
-      include/svo_ros/backend_visualizer.h
-      include/svo_ros/backend_factory.h)
-    list(APPEND SOURCES
-      src/backend_visualizer.cpp
-      src/backend_factory.cpp)
-endif()
-
-cs_add_library(${PROJECT_NAME} ${SOURCES} ${HEADERS})
-target_link_libraries(${PROJECT_NAME} ${OpenCV_LIBRARIES} ${svo_backend_LIBRARIES} ${GTSAM_LIBRARIES})
-
-cs_add_executable(svo_benchmark src/benchmark_node.cpp)
-target_link_libraries(svo_benchmark ${PROJECT_NAME})
-
-cs_add_executable(svo_node src/svo_node.cpp)
-target_link_libraries(svo_node ${PROJECT_NAME})
-
-cs_add_library(svo_nodelet src/svo_nodelet.cpp)
-target_link_libraries(svo_nodelet ${PROJECT_NAME})
-
-cs_install()
-install(FILES svo_nodelet.xml
-  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
-)
-cs_export()
+find_package(PCL REQUIRED COMPONENTS common)
+add_library(${PROJECT_NAME} SHARED src/svo_interface.cpp src/svo_factory.cpp src/ceres_backend_factory.cpp src/svo_node_base.cpp src/visualizer.cpp src/csv_dataset_reader.cpp)
+svo_target(${PROJECT_NAME})
+ament_target_dependencies(${PROJECT_NAME} PUBLIC rclcpp rclcpp_components ament_index_cpp cv_bridge sensor_msgs geometry_msgs nav_msgs std_msgs visualization_msgs tf2_ros pcl_conversions svo_msgs svo svo_cmake svo_ceres_backend svo_online_loopclosing svo_global_map vikit_ros rpg_common)
+target_include_directories(${PROJECT_NAME} SYSTEM PUBLIC ${PCL_INCLUDE_DIRS})
+target_link_libraries(${PROJECT_NAME} PUBLIC ${PCL_LIBRARIES})
+rclcpp_components_register_nodes(${PROJECT_NAME} "svo_ros::SvoNodeBase")
+add_executable(svo_node src/svo_node.cpp)
+target_link_libraries(svo_node PRIVATE ${PROJECT_NAME})
+install(TARGETS svo_node DESTINATION lib/${PROJECT_NAME})
+add_executable(svo_benchmark src/benchmark_node.cpp)
+target_link_libraries(svo_benchmark PRIVATE ${PROJECT_NAME})
+install(TARGETS svo_benchmark DESTINATION lib/${PROJECT_NAME})
+install(TARGETS ${PROJECT_NAME} EXPORT export_${PROJECT_NAME} LIBRARY DESTINATION lib ARCHIVE DESTINATION lib)
+install(DIRECTORY include/ DESTINATION include)
+install(DIRECTORY launch param DESTINATION share/${PROJECT_NAME})
+ament_export_targets(export_${PROJECT_NAME} HAS_LIBRARY_TARGET)
+ament_export_dependencies(rclcpp rclcpp_components ament_index_cpp cv_bridge sensor_msgs geometry_msgs nav_msgs std_msgs visualization_msgs tf2_ros pcl_conversions svo_msgs svo svo_cmake svo_ceres_backend svo_online_loopclosing svo_global_map vikit_ros rpg_common PCL)
+ament_package()
