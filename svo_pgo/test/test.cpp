@@ -11,6 +11,8 @@
 
 #include <fstream>
 #include <string>
+#include <iomanip>
+#include <stdexcept>
 
 using namespace svo;
 
@@ -23,6 +25,7 @@ bool OutputPoses(const std::string& filename, const ceres::MapOfPoses& poses)
     LOG(ERROR) << "Error opening the file: " << filename;
     return false;
   }
+  outfile << std::setprecision(17);
   for (std::map<int, ceres::Pose3d, std::less<int>,
                 Eigen::aligned_allocator<
                     std::pair<const int, ceres::Pose3d> > >::const_iterator
@@ -40,19 +43,25 @@ bool OutputPoses(const std::string& filename, const ceres::MapOfPoses& poses)
   return true;
 }
 
-int main()
+int main(int argc, char** argv)
 {
+  google::InitGoogleLogging(argv[0]);
+  if (argc != 3)
+  {
+    std::cerr << "Usage: test_pgo input.g2o output.txt\n";
+    return 2;
+  }
+  try
+  {
   Pgo pgo_;
-  std::string path = "/media/kunal71091/common_storage/Huawei_Project/"
-                     "sphere_bignoise_vertex3.g2o";
-
-  std::ifstream infile(path.c_str());
+  std::ifstream infile(argv[1]);
+  if (!infile) throw std::runtime_error("Cannot open input g2o file");
+  size_t poses = 0, constraints = 0;
 
   std::string data_type;
-  while (infile.good())
+  while (infile >> data_type)
   {
-    // Read whether the type is a node or a constraint.
-    infile >> data_type;
+    if (data_type.front() == '#') { std::string comment; std::getline(infile, comment); continue; }
     if (data_type == ceres::Pose3d::name())
     {
       int id;
@@ -62,10 +71,12 @@ int main()
       Transformation t;
       infile >> p.x() >> p.y() >> p.z() >> q_eigen.x() >> q_eigen.y() >>
           q_eigen.z() >> q_eigen.w();
-      Quaternion q = Quaternion(q_eigen);
-      q.normalize();
+      if (!infile || !p.allFinite() || !q_eigen.coeffs().allFinite() || q_eigen.norm() < 1e-12)
+        throw std::runtime_error("Invalid g2o pose");
+      q_eigen.normalize();
+      Quaternion q(q_eigen);
       t = Transformation(q, p);
-      pgo_.addPoseToPgoProblem(t, id);
+      pgo_.addPoseToPgoProblem(t, id); ++poses;
     }
     else if (data_type == ceres::Constraint3d::name())
     {
@@ -77,8 +88,10 @@ int main()
       infile >> id_b >> id_e;
       infile >> p.x() >> p.y() >> p.z() >> q_eigen.x() >> q_eigen.y() >>
           q_eigen.z() >> q_eigen.w();
-      Quaternion q = Quaternion(q_eigen);
-      q.normalize();
+      if (!infile || !p.allFinite() || !q_eigen.coeffs().allFinite() || q_eigen.norm() < 1e-12)
+        throw std::runtime_error("Invalid g2o pose");
+      q_eigen.normalize();
+      Quaternion q(q_eigen);
       t_be = Transformation(q, p);
       for (int i = 0; i < 6 && infile.good(); ++i)
       {
@@ -91,16 +104,22 @@ int main()
           }
         }
       }
-      pgo_.addConstraint(t_be, id_b, id_e, info);
+      if (!infile || !info.allFinite()) throw std::runtime_error("Invalid g2o information matrix");
+      pgo_.addConstraint(t_be, id_b, id_e, info); ++constraints;
     }
+    else throw std::runtime_error("Unsupported g2o record: " + data_type);
   }
+  if (poses < 2 || constraints == 0) throw std::runtime_error("The graph needs poses and constraints");
 
   std::cout << "Beginning to Solve" << std::endl;
   pgo_.solve();
 
-  std::string out = "/media/kunal71091/common_storage/Huawei_Project/"
-                    "sphere_bignoise_vertex3_out.txt";
-  OutputPoses(out, *pgo_.poses_);
-
+  if (!OutputPoses(argv[2], *pgo_.poses_)) return 1;
   return 0;
+  }
+  catch (const std::exception& error)
+  {
+    std::cerr << "Pose graph optimization failed: " << error.what() << '\n';
+    return 1;
+  }
 }

@@ -12,4 +12,9 @@
   <export>
     <build_type>ament_cmake</build_type>
   </export>
+  <depend>eigen</depend>
+  <depend>libopencv-dev</depend>
+  <depend>libgoogle-glog-dev</depend>
+  <depend>libgflags-dev</depend>
+  <depend>yaml-cpp</depend>
 </package>

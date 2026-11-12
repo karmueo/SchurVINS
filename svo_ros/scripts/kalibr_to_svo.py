@@ -4,6 +4,7 @@ import yaml
 import sys
 import argparse
 import numpy as np
+from pathlib import Path
 
 from collections import OrderedDict
 
@@ -19,6 +20,7 @@ yaml.add_representer(UnsortableOrderedDict, yaml.representer.SafeRepresenter.rep
 parser = argparse.ArgumentParser(description='Convert calibration from Kalibr to SVO format.')
 parser.add_argument('--kalibr', help='kalibr camchain-imu yaml file.')
 parser.add_argument('--imu', help='imu parameters yaml file.')
+parser.add_argument('--output', type=Path, help='Output calibration; default: svo_<input filename> beside the source.')
 args = parser.parse_args(sys.argv[1:])
 
 if args.kalibr is None:
@@ -97,7 +99,9 @@ if has_imu:
     Sii['imu_initialization']['omega_bias_sigma'] = I['gyroscope_noise_density']
     Sii['imu_initialization']['acc_bias_sigma'] = I['accelerometer_noise_density']
 
-output_file = 'svo_' + args.kalibr
+source = Path(args.kalibr)
+output_file = args.output or source.with_name('svo_' + source.name)
+output_file.parent.mkdir(parents=True, exist_ok=True)
 print('Writing to {0}.'.format(output_file))
 f = open(output_file, 'w')
 f.write(yaml.dump(S, default_flow_style=None) )
