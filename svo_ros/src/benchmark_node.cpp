@@ -1,4 +1,6 @@
 #include <vector>
+#include <filesystem>
+#include <chrono>
 #include <string>
 #include <algorithm>
 #include <iostream>
@@ -39,6 +41,15 @@ DEFINE_bool(benchmark_auto_restart, true, "Restart the pipeline in case of "
 
 namespace svo
 {
+std::string benchmarkRunDirectory(rclcpp::Node& node)
+{
+  const auto root = vk::param<std::string>(node, "output_dir", "/tmp/schurvins-results");
+  std::filesystem::create_directories(root);
+  const auto id = std::chrono::system_clock::now().time_since_epoch().count();
+  const auto directory = std::filesystem::path(root) / ("benchmark_" + std::to_string(id));
+  if (!std::filesystem::create_directory(directory)) throw std::runtime_error("Benchmark run directory already exists");
+  return directory.string();
+}
 class BenchmarkNode : public SvoInterface
 {
 #ifdef SVO_LOOP_CLOSING
@@ -122,7 +133,7 @@ private:
 BenchmarkNode::BenchmarkNode(const PipelineType& type,
                              rclcpp::Node& nh,
                              rclcpp::Node& pnh)
-  : SvoInterface(type, nh, pnh)
+  : SvoInterface(type, nh, pnh, benchmarkRunDirectory(pnh))
 {
   // create pose tracefile
   std::string save_suf = std::to_string(FLAGS_trial_idx);

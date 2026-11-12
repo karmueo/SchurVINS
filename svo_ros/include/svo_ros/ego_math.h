@@ -1,6 +1,7 @@
 #pragma once
 #include <Eigen/Core>
 #include <Eigen/Geometry>
+#include <Eigen/LU>
 #include <cstdint>
 namespace svo_ros {
 constexpr int64_t kEgoImuOffsetNs = -7000000;

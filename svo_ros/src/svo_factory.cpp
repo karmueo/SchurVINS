@@ -4,6 +4,7 @@
 #include <ament_index_cpp/get_package_share_directory.hpp>
 
 #include <svo/svo.h>
+#include <filesystem>
 #include <svo/common/imu_calibration.h>
 #include <svo_ros/svo_factory.h>
 #include <svo/frame_handler_mono.h>
@@ -223,6 +224,7 @@ LoopClosureOptions loadLoopClosureOptions(rclcpp::Node& pnh)
   std::string default_voc_path =
       ament_index_cpp::get_package_share_directory("svo_online_loopclosing") + "/vocabularies/";
   o.voc_path = vk::param<std::string>(pnh, "voc_path", default_voc_path);
+  if (!o.voc_path.empty() && o.voc_path.back() != '/') o.voc_path += '/';
   o.alpha = vk::param<double>(pnh, "alpha", 40.0);
   o.beta = vk::param<double>(pnh, "beta", 20.0);
   o.ignored_past_frames = vk::param<int>(pnh, "frames_to_ignore", 5);
@@ -246,12 +248,16 @@ LoopClosureOptions loadLoopClosureOptions(rclcpp::Node& pnh)
 }
 
 LoopClosingPtr getLoopClosingModule(rclcpp::Node& pnh,
-                                    const CameraBundlePtr& cam)
+                                    const CameraBundlePtr& cam, const std::string& trace_dir)
 {
   // Create camera
   CameraBundle::Ptr ncam = (cam) ? cam : loadCameraFromYaml(pnh);
 
   LoopClosureOptions lc_options = loadLoopClosureOptions(pnh);
+  if (!std::filesystem::is_regular_file(std::filesystem::path(lc_options.voc_path) / lc_options.voc_name))
+    throw std::runtime_error("Missing official loop-closing vocabulary: " + lc_options.voc_path + "/" + lc_options.voc_name);
+  if (!trace_dir.empty()) lc_options.image_log_base_path = trace_dir + "/loop_images";
+  if (lc_options.enable_image_logging) std::filesystem::create_directories(lc_options.image_log_base_path);
   LoopClosingPtr lc = std::make_shared<LoopClosing>(lc_options, ncam);
   lc->map_alignment_se3_ =
       std::make_shared<MapAlignmentSE3>(loadMapAlignmentOptions(pnh));
@@ -261,7 +267,7 @@ LoopClosingPtr getLoopClosingModule(rclcpp::Node& pnh,
 
 #ifdef SVO_GLOBAL_MAP
 GlobalMapPtr getGlobalMap(rclcpp::Node& pnh,
-                          const CameraBundlePtr& ncams)
+                          const CameraBundlePtr& ncams, const std::string& trace_dir)
 {
   GlobalMapOptions o;
   CameraBundle::Ptr cams = (ncams) ? ncams : loadCameraFromYaml(pnh);
@@ -373,6 +379,7 @@ GlobalMapPtr getGlobalMap(rclcpp::Node& pnh,
   gtsam_opt_options.trace_dir =
       vk::param<std::string>(pnh, "trace_dir",
                              std::string("/tmp/schurvins"));
+  if (!trace_dir.empty()) gtsam_opt_options.trace_dir = trace_dir;
   gtsam_opt_options.optim_method =
       vk::param<std::string>(pnh, "isam_optimization_method",
                         std::string("GaussNewton"));

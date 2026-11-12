@@ -46,7 +46,7 @@
 namespace
 {
 void publishLineList(
-    rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr pub,
+    rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr pub, const rclcpp::Time& stamp,
     const rpg::Aligned<std::vector, Eigen::Matrix<float, 1, 6>>& links,
     const std::string& ns, const Eigen::Vector3f& color, const double scale,
     const double alpha = 1.0)
@@ -55,7 +55,7 @@ void publishLineList(
   marker.id = 0;
   marker.ns = ns;
   marker.header.frame_id = svo::Visualizer::kWorldFrame;
-  marker.header.stamp = rclcpp::Clock().now();
+  marker.header.stamp = stamp;
   marker.type = visualization_msgs::msg::Marker::LINE_LIST;
   marker.action = visualization_msgs::msg::Marker::ADD;
   marker.points.reserve(links.size());
@@ -81,14 +81,14 @@ void publishLineList(
   pub->publish(marker);
 }
 void publishPositionVecAsPC(
-    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pub,
+    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pub, const rclcpp::Time& stamp,
     const std::vector<rpg::PositionVec>& vec_of_position_vec,
     const std::vector<float>& intensities)
 {
   CHECK_EQ(vec_of_position_vec.size(), intensities.size());
 
   svo::Visualizer::PointCloud pc;
-  pcl_conversions::toPCL(rclcpp::Clock().now(), pc.header.stamp);
+  pcl_conversions::toPCL(stamp, pc.header.stamp);
   pc.header.frame_id = svo::Visualizer::kWorldFrame;
   pc.clear();
 
@@ -112,7 +112,7 @@ void publishPositionVecAsPC(
 }
 
 void publishStringsAtPositions(
-    rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr pub,
+    rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr pub, const rclcpp::Time& stamp,
     const std::vector<std::string>& strings,
     const rpg::PositionVec& positions)
 {
@@ -123,7 +123,7 @@ void publishStringsAtPositions(
   {
     visualization_msgs::msg::Marker marker;
     marker.header.frame_id = svo::Visualizer::kWorldFrame;
-    marker.header.stamp = rclcpp::Clock().now();
+    marker.header.stamp = stamp;
     marker.type = visualization_msgs::msg::Marker::TEXT_VIEW_FACING;
     marker.action = visualization_msgs::msg::Marker::ADD;
     marker.id = i;
@@ -247,7 +247,7 @@ void Visualizer::publishSvoInfo(const svo::FrameHandlerBase* const svo,
   VLOG(100) << "Publish SVO info";
 
   svo_msgs::msg::Info msg_info;
-  msg_info.header.frame_id = "cam";
+  msg_info.header.frame_id = "cam0";
   msg_info.header.stamp = rclcpp::Time(static_cast<int64_t>(timestamp_nanoseconds));
   msg_info.processing_time = svo->lastProcessingTime();
   msg_info.stage = static_cast<int>(svo->stage());
@@ -368,7 +368,7 @@ void Visualizer::publishFeatureTracks(
   }
   writeCaptionStr(img_rgb);
   cv_bridge::CvImage img_msg;
-  img_msg.header.frame_id = "cam";
+  img_msg.header.frame_id = "cam" + std::to_string(frame_index);
   img_msg.header.stamp = rclcpp::Time(static_cast<int64_t>(timestamp));
   img_msg.image = img_rgb;
   img_msg.encoding = sensor_msgs::image_encodings::BGR8;
@@ -438,7 +438,7 @@ void Visualizer::publishImagesWithFeatures(const FrameBundlePtr& frame_bundle,
     }
     writeCaptionStr(img_rgb);
     cv_bridge::CvImage img_msg;
-    img_msg.header.frame_id = "cam";
+    img_msg.header.frame_id = "cam" + std::to_string(i);
     img_msg.header.stamp = rclcpp::Time(static_cast<int64_t>(timestamp));
     img_msg.image = img_rgb;
     img_msg.encoding = sensor_msgs::image_encodings::BGR8;
@@ -572,7 +572,7 @@ void Visualizer::publishSeedsAsPointcloud(const Frame& frame,
   }
 
   pc_->header.frame_id = kWorldFrame;
-  pc_->header.stamp = rclcpp::Clock().now().nanoseconds();
+  pcl_conversions::toPCL(pnh_.now(), pc_->header.stamp);
   pc_->reserve(frame.num_features_);
   for (size_t i = 0; i < frame.num_features_; ++i)
   {
@@ -653,7 +653,7 @@ void Visualizer::publishMapRegion(const std::vector<FramePtr>& frames)
   {
     pc_->header.frame_id = kWorldFrame;
 
-    pcl_conversions::toPCL(rclcpp::Clock().now(), pc_->header.stamp);
+    pcl_conversions::toPCL(pnh_.now(), pc_->header.stamp);
     pc_->clear();
     pc_->reserve(frames.size() * 150);
     PointType p;
@@ -694,7 +694,7 @@ void Visualizer::publishKeyframeWithPoints(const FramePtr& frame,
   Transformation T_world_cam(frame->T_f_w_.inverse());
   vk::output_helper::publishFrameMarker(
       pub_frames_, T_world_cam.getRotationMatrix(), T_world_cam.getPosition(),
-      "kfs", rclcpp::Clock().now(), frame->id_ * 10, 0, marker_scale * 2.0);
+      "kfs", pnh_.now(), frame->id_ * 10, 0, marker_scale * 2.0);
 
   // publish point cloud and links
   Position xyz_world;
@@ -723,14 +723,14 @@ void Visualizer::publishKeyframeWithPoints(const FramePtr& frame,
     if (isEdgelet(frame->type_vec_[i]))
     {
       vk::output_helper::publishPointMarker(
-          pub_points_, xyz_world, "pts", rclcpp::Clock().now(), id, 0,
+          pub_points_, xyz_world, "pts", pnh_.now(), id, 0,
           marker_scale * vis_scale_, Vector3d(0, 0.6, 0),
           publish_points_display_time_);
     }
     else
     {
       vk::output_helper::publishPointMarker(
-          pub_points_, xyz_world, "pts", rclcpp::Clock().now(), id, 0,
+          pub_points_, xyz_world, "pts", pnh_.now(), id, 0,
           marker_scale * vis_scale_, Vector3d(1, 0, 1),
           publish_points_display_time_);
     }
@@ -749,7 +749,7 @@ void Visualizer::publishKeyframeWithPoints(const FramePtr& frame,
      vk::output_helper::publishArrowMarker(
      pub_points_, T_world_from_vision_*point->pos_,
      T_world_from_vision_.rotation_matrix()*point->normal_, 0.1,
-     "normal", rclcpp::Clock().now(), point->id_, 0,  0.005,
+     "normal", pnh_.now(), point->id_, 0,  0.005,
      Vector3d(0.0, 0., 1.0));
      }
      */
@@ -769,7 +769,7 @@ void Visualizer::publishActiveKeyframes(const std::vector<FramePtr>& active_kfs)
   {
     vk::output_helper::publishLineMarker(
         pub_frames_, active_kfs[i]->pos(), active_kfs[i + 1]->pos(), ns,
-        rclcpp::Clock().now(), i, 0,  // add the marker
+        pnh_.now(), i, 0,  // add the marker
         0.8 * trajectory_marker_scale_ * vis_scale_,
         Eigen::Vector3d(.0, .0, 0.5));
   }
@@ -791,7 +791,7 @@ void Visualizer::exportToDense(const FrameBundlePtr& frame_bundle)
 
       cv_bridge::CvImage img_msg;
       img_msg.header.stamp = msg.header.stamp;
-      img_msg.header.frame_id = "camera";
+      img_msg.header.frame_id = "cam" + std::to_string(cam_index);
       if (!frame->original_color_image_.empty())
       {
         img_msg.image = frame->original_color_image_;
@@ -862,12 +862,12 @@ void Visualizer::visualizeCoordinateFrames(const Transformation& T_world_cam)
   // camera frame
   vk::output_helper::publishFrameMarker(
       pub_markers_, T_world_cam.getRotationMatrix(), T_world_cam.getPosition(),
-      "cam", rclcpp::Clock().now(), 0, 0, 0.2);
+      "cam", pnh_.now(), 0, 0, 0.2);
 
   // origin frame
   vk::output_helper::publishFrameMarker(pub_markers_, Matrix3d::Identity(),
                                         Vector3d::Zero(), kWorldFrame,
-                                        rclcpp::Clock().now(), 0, 0, 0.2);
+                                        pnh_.now(), 0, 0, 0.2);
 }
 
 #ifdef SVO_LOOP_CLOSING
@@ -876,7 +876,7 @@ void Visualizer::publishLoopClosureInfo(const LoopVizInfoVec& loop_viz_info,
                                         const Eigen::Vector3f& color,
                                         const double scale)
 {
-  publishLineList(pub_loop_closure_, loop_viz_info, ns, color, scale);
+  publishLineList(pub_loop_closure_, pnh_.now(), loop_viz_info, ns, color, scale);
 }
 
 bool Visualizer::publishPoseGraph(const std::vector<KeyFramePtr>& kf_list,
@@ -887,7 +887,7 @@ bool Visualizer::publishPoseGraph(const std::vector<KeyFramePtr>& kf_list,
   if (pub_pose_graph_->get_subscription_count() > 0)
   {
     PointCloud pose_graph_pc;
-    pcl_conversions::toPCL(rclcpp::Clock().now(), pose_graph_pc.header.stamp);
+    pcl_conversions::toPCL(pnh_.now(), pose_graph_pc.header.stamp);
     pose_graph_pc.header.frame_id = kWorldFrame;
     pose_graph_pc.clear();
     pose_graph_pc.reserve(kf_list.size());
@@ -913,7 +913,7 @@ bool Visualizer::publishPoseGraph(const std::vector<KeyFramePtr>& kf_list,
     {
       // TODO: we do not need to redo it every time
       pose_graph_map_.clear();
-      pcl_conversions::toPCL(rclcpp::Clock().now(), pose_graph_map_.header.stamp);
+      pcl_conversions::toPCL(pnh_.now(), pose_graph_map_.header.stamp);
       pose_graph_map_.reserve(kf_list.size() * 60);
       for (size_t i = 0; i < kf_list.size() - ignored_past_frames; i++)
       {
@@ -934,7 +934,7 @@ bool Visualizer::publishPoseGraph(const std::vector<KeyFramePtr>& kf_list,
     }
     else
     {
-      pcl_conversions::toPCL(rclcpp::Clock().now(), pose_graph_map_.header.stamp);
+      pcl_conversions::toPCL(pnh_.now(), pose_graph_map_.header.stamp);
       const KeyFramePtr kf = kf_list[kf_list.size() - ignored_past_frames];
       PointType pt;
       pt.intensity = 60;
@@ -978,14 +978,14 @@ void Visualizer::visualizeGlobalMap(const GlobalMap& map, const std::string ns,
   {
     VisibilityInfoVec vis;
     map.getVizLinks(&vis, 10);
-    publishLineList(pub_global_map_vis_, vis, ns, color, scale, 0.5);
+    publishLineList(pub_global_map_vis_, pnh_.now(), vis, ns, color, scale, 0.5);
   }
 
   if (pub_global_map_keypoints_vis_->get_subscription_count() > 0)
   {
     VisibilityInfoVec vis;
     map.getKeypointsVisLinks(&vis);
-    publishLineList(pub_global_map_keypoints_vis_, vis, ns,
+    publishLineList(pub_global_map_keypoints_vis_, pnh_.now(), vis, ns,
                     Eigen::Vector3f(1.0, 1.0, 1.0), scale, 0.5);
   }
 
@@ -994,7 +994,7 @@ void Visualizer::visualizeGlobalMap(const GlobalMap& map, const std::string ns,
     rpg::PositionVec kf_pos;
     rpg::PositionVec kf_pos_with_priors;
     map.getAllKFPositions(&kf_pos, &kf_pos_with_priors);
-    publishPositionVecAsPC(pub_global_map_kfs_opt_,
+    publishPositionVecAsPC(pub_global_map_kfs_opt_, pnh_.now(),
                            { kf_pos, kf_pos_with_priors},
                            { 60, 120});
   }
@@ -1003,7 +1003,7 @@ void Visualizer::visualizeGlobalMap(const GlobalMap& map, const std::string ns,
     rpg::PositionVec kf_pos;
     rpg::PositionVec last_queried_kf_pos;
     map.getQueryKFPositions(&kf_pos, &last_queried_kf_pos);
-    publishPositionVecAsPC(pub_global_map_query_kfs_,
+    publishPositionVecAsPC(pub_global_map_query_kfs_, pnh_.now(),
                            { kf_pos, last_queried_kf_pos},
                            { 60, 120});
   }
@@ -1012,7 +1012,7 @@ void Visualizer::visualizeGlobalMap(const GlobalMap& map, const std::string ns,
   {
     VisibilityInfoVec vis;
     map.getMatchedPointsVisLinks(&vis);
-    publishLineList(pub_global_map_matched_points_, vis, ns,
+    publishLineList(pub_global_map_matched_points_, pnh_.now(), vis, ns,
                     Eigen::Vector3f(1.0f, 0.0f, 0.0f), scale, 0.5);
   }
 
@@ -1020,7 +1020,7 @@ void Visualizer::visualizeGlobalMap(const GlobalMap& map, const std::string ns,
   {
     VisibilityInfoVec vis;
     map.getReobservedPointsVisLinks(&vis);
-    publishLineList(pub_global_map_reobserved_points_, vis, ns,
+    publishLineList(pub_global_map_reobserved_points_, pnh_.now(), vis, ns,
                     Eigen::Vector3f(0.0f, 1.0f, 0.0f), scale, 0.5);
   }
 
@@ -1028,7 +1028,7 @@ void Visualizer::visualizeGlobalMap(const GlobalMap& map, const std::string ns,
   {
     VisibilityInfoVec vis;
     map.getReobservedPointsVisLinksFrontend(&vis);
-    publishLineList(pub_global_map_reobserved_points_frontend_, vis, ns,
+    publishLineList(pub_global_map_reobserved_points_frontend_, pnh_.now(), vis, ns,
                     Eigen::Vector3f(0.0f, 1.0f, 1.0f), scale, 0.5);
   }
 
@@ -1043,7 +1043,7 @@ void Visualizer::visualizeGlobalMap(const GlobalMap& map, const std::string ns,
     {
       id_strs.emplace_back(std::to_string(id));
     }
-    publishStringsAtPositions(pub_global_map_point_ids_,
+    publishStringsAtPositions(pub_global_map_point_ids_, pnh_.now(),
                               id_strs, positions);
 
   }
@@ -1055,7 +1055,7 @@ void Visualizer::visualizeGlobalMap(const GlobalMap& map, const std::string ns,
     rpg::PositionVec points_with_priors;
     rpg::PositionVec unstable_points;
     map.getAllPoints(&points, &points_with_priors, &unstable_points);
-    publishPositionVecAsPC(pub_global_map_pts_opt_,
+    publishPositionVecAsPC(pub_global_map_pts_opt_, pnh_.now(),
                            {unstable_points, points, points_with_priors },
     { 30, 100, 200 });
   }
@@ -1078,7 +1078,7 @@ void Visualizer::visualizeFixedLandmarks(const FramePtr &frame)
           frame->landmark_vec_[ftr_idx]->pos().transpose().cast<float>();
     }
   }
-  publishLineList(pub_visible_fixed_landmarks_, vis, "visible_fixed_landmarks",
+  publishLineList(pub_visible_fixed_landmarks_, pnh_.now(), vis, "visible_fixed_landmarks",
                   Eigen::Vector3f(1.0f, 0.93f, 0.40f), 0.5, 0.5);
 }
 #endif

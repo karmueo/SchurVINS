@@ -62,6 +62,9 @@ SvoInterface::SvoInterface(
       break;
   }
   ncam_ = svo_->getNCamera();
+  const size_t expected = pipeline_type == PipelineType::kMono ? 1 : (pipeline_type == PipelineType::kStereo ? 2 : 4);
+  if (ncam_->numCameras() != expected)
+    throw std::invalid_argument("Calibration camera count does not match selected pipeline");
 
   visualizer_.reset(
         new Visualizer(svo_->options_.trace_dir, pnh_, ncam_->getNumCameras()));
@@ -90,7 +93,7 @@ SvoInterface::SvoInterface(
   {
 #ifdef SVO_LOOP_CLOSING
     LoopClosingPtr loop_closing_ptr =
-        factory::getLoopClosingModule(pnh_, svo_->getNCamera());
+        factory::getLoopClosingModule(pnh_, svo_->getNCamera(), run_dir);
     svo_->lc_ = std::move(loop_closing_ptr);
     CHECK(svo_->depth_filter_->options_.extra_map_points)
         << "The depth filter seems to be initialized without extra map points.";
@@ -102,7 +105,7 @@ SvoInterface::SvoInterface(
   if(vk::param<bool>(pnh_, "use_global_map", false))
   {
 #ifdef SVO_GLOBAL_MAP
-    svo_->global_map_ = factory::getGlobalMap(pnh_, svo_->getNCamera());
+    svo_->global_map_ = factory::getGlobalMap(pnh_, svo_->getNCamera(), run_dir);
     if (imu_handler_)
     {
       svo_->global_map_->initializeIMUParams(imu_handler_->imu_calib_,

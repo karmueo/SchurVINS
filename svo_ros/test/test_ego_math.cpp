@@ -8,7 +8,7 @@ TEST(EgoMath, MillimetersAndExtrinsicDirection)
   auto result = svo_ros::egoBodyCamera(source);
   source.block<3,1>(0,3) *= .001;
   EXPECT_LT((source * result - Eigen::Matrix4d::Identity()).norm(), 1e-12);
-  EXPECT_NEAR(result.block<3,1>(0,3).norm(), std::sqrt(.01+.0004+.000009), 1e-12);
+  EXPECT_NEAR((result.block<3,1>(0,3).norm()), std::sqrt(.01+.0004+.000009), 1e-12);
 }
 TEST(EgoMath, BiasConversionAndSingleTimeCorrection)
 {

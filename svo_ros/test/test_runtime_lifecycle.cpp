@@ -18,11 +18,13 @@ TEST(RuntimeLifecycle, ReadOnlyResetAndComponentExit)
   auto component = std::make_shared<svo_ros::SvoNodeBase>(options);
   EXPECT_FALSE(component->set_parameter(rclcpp::Parameter("use_imu", false)).successful);
   auto observer = std::make_shared<rclcpp::Node>("runtime_lifecycle_observer");
-  std::promise<void> reset_seen; bool delivered = false;
+  std::promise<void> reset_seen, stop_seen; bool delivered = false, stopped = false;
   auto subscription = observer->create_subscription<std_msgs::msg::String>("/svo/runtime_status", rclcpp::QoS(1).transient_local(),
     [&](std_msgs::msg::String::ConstSharedPtr msg) {
       if (!delivered && msg->data.find("\"resets\":1") != std::string::npos)
       { delivered = true; reset_seen.set_value(); }
+      if (!stopped && msg->data.find("\"stopped\":true") != std::string::npos)
+      { stopped = true; stop_seen.set_value(); }
     });
   auto control = observer->create_publisher<std_msgs::msg::String>("/svo/remote_key", 10);
   rclcpp::executors::MultiThreadedExecutor executor(rclcpp::ExecutorOptions(), 3);
@@ -32,8 +34,7 @@ TEST(RuntimeLifecycle, ReadOnlyResetAndComponentExit)
   const bool reset = reset_seen.get_future().wait_for(std::chrono::seconds(10)) == std::future_status::ready;
   EXPECT_TRUE(reset);
   command.data = "q"; control->publish(command);
-  const auto end = std::chrono::steady_clock::now() + std::chrono::seconds(10);
-  while (!component->stopped() && std::chrono::steady_clock::now() < end) std::this_thread::yield();
+  EXPECT_EQ(stop_seen.get_future().wait_for(std::chrono::seconds(10)), std::future_status::ready);
   EXPECT_TRUE(component->stopped());
   EXPECT_TRUE(rclcpp::ok()); // q must leave the component container alive.
   executor.cancel(); spin.join(); executor.remove_node(component); component.reset();

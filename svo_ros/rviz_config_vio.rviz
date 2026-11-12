@@ -79,7 +79,7 @@ Visualization Manager:
       Value: false
     - Class: rviz_default_plugins/Marker
       Enabled: true
-      Marker Topic: /svo/points
+      Topic: /svo/points
       Name: /svo/points
       Namespaces:
         pts: false
@@ -104,7 +104,7 @@ Visualization Manager:
       Value: true
     - Class: rviz_default_plugins/Image
       Enabled: true
-      Image Topic: /svo/image/0
+      Topic: /svo/image/0
       Max Value: 1
       Median window: 5
       Min Value: 0
@@ -116,7 +116,7 @@ Visualization Manager:
       Value: true
     - Class: rviz_default_plugins/Marker
       Enabled: true
-      Marker Topic: /svo/loop_closures
+      Topic: /svo/loop_closures
       Name: /svo/loop_closures
       Namespaces:
         loop_detection: true
@@ -155,7 +155,7 @@ Visualization Manager:
       Value: false
     - Class: rviz_default_plugins/Marker
       Enabled: false
-      Marker Topic: /svo/keyframes
+      Topic: /svo/keyframes
       Name: svo_kfs
       Namespaces:
         {}
@@ -275,7 +275,7 @@ Visualization Manager:
       Value: true
     - Class: rviz_default_plugins/Image
       Enabled: false
-      Image Topic: /cam0/image_raw
+      Topic: /cam0/image_raw
       Max Value: 1
       Median window: 5
       Min Value: 0
@@ -317,7 +317,7 @@ Visualization Manager:
       Value: true
     - Class: rviz_default_plugins/Image
       Enabled: true
-      Image Topic: /svo/image/1
+      Topic: /svo/image/1
       Max Value: 1
       Median window: 5
       Min Value: 0

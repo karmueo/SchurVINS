@@ -70,7 +70,7 @@ Visualization Manager:
       Value: false
     - Class: rviz_default_plugins/Marker
       Enabled: true
-      Marker Topic: /svo/points
+      Topic: /svo/points
       Name: /svo/points
       Namespaces:
         pts: true
@@ -95,7 +95,7 @@ Visualization Manager:
       Value: true
     - Class: rviz_default_plugins/Image
       Enabled: true
-      Image Topic: /svo/image/0
+      Topic: /svo/image/0
       Max Value: 1
       Median window: 5
       Min Value: 0
@@ -107,7 +107,7 @@ Visualization Manager:
       Value: true
     - Class: rviz_default_plugins/Marker
       Enabled: true
-      Marker Topic: /svo/loop_closures
+      Topic: /svo/loop_closures
       Name: /svo/loop_closures
       Namespaces:
         {}
@@ -145,7 +145,7 @@ Visualization Manager:
       Value: false
     - Class: rviz_default_plugins/Marker
       Enabled: true
-      Marker Topic: /svo/keyframes
+      Topic: /svo/keyframes
       Name: svo_kfs
       Namespaces:
         cams: true
@@ -364,7 +364,7 @@ Visualization Manager:
       Value: true
     - Class: rviz_default_plugins/Marker
       Enabled: false
-      Marker Topic: /svo/global_map_all_vis
+      Topic: /svo/global_map_all_vis
       Name: global_map_vis
       Namespaces:
         {}
@@ -372,7 +372,7 @@ Visualization Manager:
       Value: false
     - Class: rviz_default_plugins/Marker
       Enabled: true
-      Marker Topic: /svo/visible_fixed_landmarks
+      Topic: /svo/visible_fixed_landmarks
       Name: visible_fixed_landmarks
       Namespaces:
         {}
@@ -380,7 +380,7 @@ Visualization Manager:
       Value: true
     - Class: rviz_default_plugins/Marker
       Enabled: false
-      Marker Topic: /svo/global_map_matched
+      Topic: /svo/global_map_matched
       Name: global_map_matched_points
       Namespaces:
         {}
@@ -388,7 +388,7 @@ Visualization Manager:
       Value: false
     - Class: rviz_default_plugins/Marker
       Enabled: false
-      Marker Topic: /svo/global_map_reobserved
+      Topic: /svo/global_map_reobserved
       Name: global_map_reobserved_points
       Namespaces:
         {}
@@ -396,7 +396,7 @@ Visualization Manager:
       Value: false
     - Class: rviz_default_plugins/Marker
       Enabled: false
-      Marker Topic: /svo/global_map_reobserved_frontend
+      Topic: /svo/global_map_reobserved_frontend
       Name: global_map_reobserved_points_frontend
       Namespaces:
         {}
@@ -404,7 +404,7 @@ Visualization Manager:
       Value: false
     - Class: rviz_default_plugins/MarkerArray
       Enabled: false
-      Marker Topic: /svo/global_map_point_ids
+      Topic: /svo/global_map_point_ids
       Name: global_map_point_ids
       Namespaces:
         {}
@@ -412,7 +412,7 @@ Visualization Manager:
       Value: false
     - Class: rviz_default_plugins/Marker
       Enabled: false
-      Marker Topic: /svo/global_map_keypoints_vis
+      Topic: /svo/global_map_keypoints_vis
       Name: global_map_keypoints_vis
       Namespaces:
         {}

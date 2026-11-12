@@ -25,13 +25,13 @@ std::shared_ptr<ImuHandler> getImuHandler(
 /// Create loop closing module
 std::shared_ptr<LoopClosing> getLoopClosingModule(
     rclcpp::Node& pnh,
-    const CameraBundlePtr& cam=nullptr);
+    const CameraBundlePtr& cam=nullptr, const std::string& trace_dir = "");
 #endif
 
 #ifdef SVO_GLOBAL_MAP
 std::shared_ptr<GlobalMap> getGlobalMap(
     rclcpp::Node& pnh,
-    const CameraBundlePtr& ncams = nullptr);
+    const CameraBundlePtr& ncams = nullptr, const std::string& trace_dir = "");
 #endif
 
 /// Factory for Mono-SVO.
