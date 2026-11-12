@@ -10,6 +10,8 @@
 
 #include <memory>          // std::shared_ptr
 #include <mutex>           // std::mutex
+#include <condition_variable>
+#include <limits>
 #include <iostream>
 #include <fstream>
 #include <deque>
@@ -175,7 +177,8 @@ public:
 
   double getLatestTimestamp() const{
     ulock_t lock(measurements_mut_);
-    return measurements_.front().timestamp_;
+    return measurements_.empty() ? -std::numeric_limits<double>::infinity()
+                                 : measurements_.front().timestamp_;
   }
 
   bool waitTill(const double timestamp_sec, const double timeout_sec=1.0);
@@ -184,6 +187,7 @@ public:
 
 private:
   mutable mutex_t measurements_mut_;
+  std::condition_variable measurements_changed_;
   ImuMeasurements measurements_; ///< Newest measurement is at the front of the list
   ImuMeasurements temporal_imu_window_;
   std::ofstream ofs_; //!< File stream for tracing the received measurments

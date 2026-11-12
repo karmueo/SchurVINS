@@ -17,14 +17,29 @@ from rosbag2_interfaces.srv import Resume
 
 
 def stop(process):
-    if process is None or process.poll() is not None:
+    if process is None:
         return
-    os.killpg(process.pid, signal.SIGINT)
+    def signal_group(value):
+        try:
+            os.killpg(process.pid, value)
+            return True
+        except ProcessLookupError:
+            return False
+    # ros2 wrappers may exit while a stuck node remains in their process group.
+    if not signal_group(signal.SIGINT):
+        process.wait()
+        return
     try:
         process.wait(timeout=30)
     except subprocess.TimeoutExpired:
-        os.killpg(process.pid, signal.SIGTERM)
-        process.wait(timeout=10)
+        signal_group(signal.SIGTERM)
+        try:
+            process.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            signal_group(signal.SIGKILL)
+            process.wait()
+    # Never leave an orphaned estimator consuming CPU after a failed attempt.
+    signal_group(signal.SIGKILL)
 
 
 def main():

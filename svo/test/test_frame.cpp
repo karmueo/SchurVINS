@@ -108,7 +108,7 @@ class SVOFrameTest: public ::testing::Test
 {
 protected:
   SVOFrameTest()
-  {  std::srand(std::time(NULL)); }
+  { std::srand(7); }
 };
 
 TEST_F(SVOFrameTest, testBearingVectorJacobian)
@@ -137,21 +137,15 @@ TEST_F(SVOFrameTest, testUnitPlaneJacobian)
   {
     Transformation T_cam_imu;
     T_cam_imu.setRandom(1, 0.5);
-    Eigen::Vector3d p_in_imu, f_in_imu;
-    // project2d requires nonzero z coordinate
-    while(true)
-    {
-      p_in_imu = test_utils::generateRandomPoint(1, 10);
-      f_in_imu = test_utils::generateRandomPoint(1, 10);
-      const Eigen::Vector3d p_in_cam = T_cam_imu * p_in_imu;
-      const Eigen::Vector3d f_in_cam = T_cam_imu * f_in_imu;
-      if(p_in_cam(2) > 1e-3 && f_in_cam(2) > 1e-3)
-        break;
-    }
-    f_in_imu.normalize();
+    // Keep finite differencing away from the projective z=0 singularity.
+    // The former wall-clock random fixture could produce an arbitrarily large
+    // Jacobian, whose rounding error exceeded the unchanged absolute tolerance.
+    const Eigen::Vector3d p_in_cam(.3*(i-4.5), .2*std::cos(i), 1.0+.5*i);
+    const Eigen::Vector3d p_in_imu = T_cam_imu.inverse()*p_in_cam;
+    const Eigen::Vector3d f_measured = p_in_cam.normalized();
     TEST_JACOBIAN_FINITE_DIFFERENCE(
           UnitPlaneFunctor, input, 1e-7, 1e-3,
-          T_cam_imu, p_in_imu, f_in_imu);
+          T_cam_imu, p_in_imu, f_measured);
   }
 }
 

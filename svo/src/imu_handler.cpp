@@ -12,6 +12,7 @@
 #include "svo/imu_handler.h"
 
 #include <numeric>
+#include <chrono>
 
 #include <vikit/math_utils.h>
 #include <vikit/csv_utils.h>
@@ -309,6 +310,7 @@ bool ImuHandler::addImuMeasurement(
   {
     temporal_imu_window_.push_front(m);
   }
+  measurements_changed_.notify_all();
   return true;
 }
 
@@ -591,22 +593,12 @@ IMUTemporalStatus ImuHandler::checkTemporalStatus(const double time_sec)
 bool ImuHandler::waitTill(const double img_timestamp_sec,
                           const double timeout_sec)
 {
-  vk::Timer wait_time;
-  wait_time.start();
-  while (this->getLatestTimestamp() <
-         img_timestamp_sec - this->imu_calib_.delay_imu_cam)
-  {
-    if (wait_time.stop() > timeout_sec)
-    {
-      LOG(ERROR) << "Did not get IMU measurements";
-      return false;
-    }
-    wait_time.resume();
-    // wait
-    VLOG(50) << "Waiting for imu measurements.";
-  }
-
-  return true;
+  ulock_t lock(measurements_mut_);
+  const double required = img_timestamp_sec - imu_calib_.delay_imu_cam;
+  // A single wait budget is essential: restarting a timer on every poll made
+  // a missing covering sample spin forever and prevented orderly shutdown.
+  return measurements_changed_.wait_for(lock, std::chrono::duration<double>(timeout_sec),
+      [&] { return !measurements_.empty() && measurements_.front().timestamp_ >= required; });
 }
 
 } // namespace svo

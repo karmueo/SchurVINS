@@ -3,6 +3,7 @@
 #include <svo_ros/visualizer.h>
 #include <svo/frame_handler_base.h>
 #include <svo/common/frame.h>
+#include <svo/common/conversions.h>
 #include <svo/imu_handler.h>
 #include <vikit/params_helper.h>
 #include <cv_bridge/cv_bridge.hpp>
@@ -225,7 +226,9 @@ void SvoNodeBase::worker()
         lock.unlock();
         const auto& w = imu_msg->angular_velocity; const auto& a = imu_msg->linear_acceleration;
         interface_->imu_handler_->addImuMeasurement(svo::ImuMeasurement(
-          rclcpp::Time(imu_msg->header.stamp).seconds(), Eigen::Vector3d(w.x,w.y,w.z), Eigen::Vector3d(a.x,a.y,a.z)));
+          static_cast<double>(rclcpp::Time(imu_msg->header.stamp).nanoseconds()) *
+              svo::common::conversions::kNanoSecondsToSeconds,
+          Eigen::Vector3d(w.x,w.y,w.z), Eigen::Vector3d(a.x,a.y,a.z)));
         lock.lock();
         waiting_for_prior = false;
       }

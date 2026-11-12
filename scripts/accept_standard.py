@@ -19,13 +19,29 @@ from std_msgs.msg import String
 
 
 def stop(process):
-    if process and process.poll() is None:
-        os.killpg(process.pid, signal.SIGINT)
+    if process is None:
+        return
+    def signal_group(value):
         try:
-            process.wait(timeout=30)
-        except subprocess.TimeoutExpired:
-            os.killpg(process.pid, signal.SIGTERM)
+            os.killpg(process.pid, value)
+            return True
+        except ProcessLookupError:
+            return False
+    # ros2 wrappers may exit while a stuck node remains in their process group.
+    if not signal_group(signal.SIGINT):
+        process.wait()
+        return
+    try:
+        process.wait(timeout=30)
+    except subprocess.TimeoutExpired:
+        signal_group(signal.SIGTERM)
+        try:
             process.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            signal_group(signal.SIGKILL)
+            process.wait()
+    # Never leave an orphaned estimator consuming CPU after a failed attempt.
+    signal_group(signal.SIGKILL)
 
 
 def main():
