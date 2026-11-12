@@ -78,6 +78,10 @@ def main():
             raise RuntimeError(f'Launch process exited: {launched.returncode}')
         if status['svo'].get('failed'):
             raise RuntimeError(f"Estimator reported failure: {status['svo']}")
+        if status['ego'].get('image_queue_overflow', 0):
+            raise RuntimeError(f"EGO decode queue overflow: {status['ego']}")
+        if status['ego'].get('invalid_images', 0):
+            raise RuntimeError(f"EGO image decoding failed: {status['ego']}")
         if time.monotonic() - started > args.timeout:
             raise TimeoutError(f'Acceptance timeout: {status}')
     try:
@@ -113,6 +117,9 @@ def main():
         drain_deadline = time.monotonic() + 120
         while not (status['ego'].get('raw_images') == args.images and
                    status['ego'].get('raw_imu') == args.imu and
+                   status['ego'].get('decoded_images') == args.images and
+                   status['ego'].get('pending_decode_images', 0) == 0 and
+                   not status['ego'].get('decoder_inflight', False) and
                    status['svo'].get('image_groups') == args.images and
                    status['svo'].get('imu_received') == args.imu and
                    status['svo'].get('pending_images') == 0 and
@@ -131,6 +138,9 @@ def main():
             'raw_imu': status['ego']['raw_imu'] == args.imu,
             'decoded_images': status['ego']['decoded_images'] == args.images,
             'invalid_images': status['ego']['invalid_images'] == 0,
+            'decode_queue_drained': status['ego'].get('pending_decode_images', 0) == 0 and
+                                    not status['ego'].get('decoder_inflight', False),
+            'decode_queue_overflow': status['ego'].get('image_queue_overflow', 0) == 0,
             'published_imu': status['ego']['published_imu'] == args.imu,
             'image_messages': summary['image_messages'] == 2 * args.images,
             'paired_images': summary['image_groups'] == args.images,

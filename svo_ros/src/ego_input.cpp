@@ -11,6 +11,9 @@ EgoInput::EgoInput(const rclcpp::NodeOptions& options) : Node("ego_input", optio
 {
   const auto file = vk::param<std::string>(*this, "source_calibration", "");
   if (file.empty()) throw std::invalid_argument("source_calibration is required");
+  const auto capacity = vk::param<int>(*this, "input_queue_capacity", 64);
+  if (capacity < 1) throw std::invalid_argument("input_queue_capacity must be positive");
+  image_queue_capacity_ = static_cast<size_t>(capacity);
   const auto calibration = YAML::LoadFile(file);
   for (int i = 0; i < 3; ++i)
   {
@@ -31,9 +34,13 @@ EgoInput::EgoInput(const rclcpp::NodeOptions& options) : Node("ego_input", optio
     [this](sensor_msgs::msg::Imu::ConstSharedPtr msg) { imu(std::move(msg)); }, imu_options);
   status_ = create_publisher<std_msgs::msg::String>("/ego/runtime_status", rclcpp::QoS(1).transient_local());
   timer_ = create_wall_timer(std::chrono::milliseconds(500), [this] {
+    std::lock_guard<std::mutex> lock(image_mutex_);
     std_msgs::msg::String msg;
     msg.data = "{\"raw_images\":" + std::to_string(received_images_) +
       ",\"decoded_images\":" + std::to_string(decoded_images_) + ",\"invalid_images\":" + std::to_string(invalid_images_) +
+      ",\"pending_decode_images\":" + std::to_string(pending_images_.size()) +
+      ",\"decoder_inflight\":" + (decoder_inflight_ ? "true" : "false") +
+      ",\"image_queue_overflow\":" + std::to_string(image_queue_overflow_) +
       ",\"raw_imu\":" + std::to_string(received_imu_) + ",\"published_imu\":" + std::to_string(published_imu_) +
       ",\"matched_image_publishers\":" + std::to_string(image_sub_->get_publisher_count()) +
       ",\"matched_imu_publishers\":" + std::to_string(imu_sub_->get_publisher_count()) +
@@ -42,10 +49,45 @@ EgoInput::EgoInput(const rclcpp::NodeOptions& options) : Node("ego_input", optio
       ",\"matched_imu_subscribers\":" + std::to_string(corrected_imu_->get_subscription_count()) + "}";
     status_->publish(msg);
   });
+  decoder_ = std::thread(&EgoInput::decodeImages, this);
+}
+EgoInput::~EgoInput()
+{
+  { std::lock_guard<std::mutex> lock(image_mutex_); stopping_ = true; }
+  image_changed_.notify_all();
+  if (decoder_.joinable()) decoder_.join();
 }
 void EgoInput::image(sensor_msgs::msg::CompressedImage::ConstSharedPtr msg)
 {
   ++received_images_;
+  std::lock_guard<std::mutex> lock(image_mutex_);
+  if (stopping_ || image_queue_overflow_) return;
+  if (pending_images_.size() >= image_queue_capacity_)
+  {
+    ++image_queue_overflow_;
+    RCLCPP_ERROR(get_logger(), "EGO image queue overflow: replay more slowly");
+    return;
+  }
+  pending_images_.push_back(std::move(msg));
+  image_changed_.notify_one();
+}
+void EgoInput::decodeImages()
+{
+  std::unique_lock<std::mutex> lock(image_mutex_);
+  while (true)
+  {
+    image_changed_.wait(lock, [this] { return stopping_ || !pending_images_.empty(); });
+    if (pending_images_.empty()) return;
+    auto msg = std::move(pending_images_.front()); pending_images_.pop_front();
+    decoder_inflight_ = true;
+    lock.unlock();
+    decodeImage(std::move(msg));
+    lock.lock();
+    decoder_inflight_ = false;
+  }
+}
+void EgoInput::decodeImage(sensor_msgs::msg::CompressedImage::ConstSharedPtr msg)
+{
   try
   {
     if (msg->format.find("jpeg") == std::string::npos && msg->format.find("jpg") == std::string::npos)

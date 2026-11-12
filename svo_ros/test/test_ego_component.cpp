@@ -27,6 +27,9 @@ TEST(EgoComponent, ActualCallbacksCorrectAndSplitWithoutAccumulation)
   std::mutex mutex; std::condition_variable changed;
   std::vector<sensor_msgs::msg::Image> left, right;
   std::vector<sensor_msgs::msg::Imu> imus;
+  std::string status_snapshot;
+  auto status_sub = source->create_subscription<std_msgs::msg::String>("/ego/runtime_status", rclcpp::QoS(1).transient_local(),
+    [&](std_msgs::msg::String::ConstSharedPtr msg) { std::lock_guard<std::mutex> lock(mutex); status_snapshot = msg->data; changed.notify_all(); });
   auto left_sub = source->create_subscription<sensor_msgs::msg::Image>("/ego/cam0/image_raw", rclcpp::QoS(64).reliable(),
     [&](sensor_msgs::msg::Image::ConstSharedPtr msg) { std::lock_guard<std::mutex> lock(mutex); left.push_back(*msg); changed.notify_all(); });
   auto right_sub = source->create_subscription<sensor_msgs::msg::Image>("/ego/cam1/image_raw", rclcpp::QoS(64).reliable(),
@@ -58,10 +61,16 @@ TEST(EgoComponent, ActualCallbacksCorrectAndSplitWithoutAccumulation)
   bool complete;
   {
     std::unique_lock<std::mutex> lock(mutex);
-    complete = changed.wait_for(lock, std::chrono::seconds(15), [&] { return left.size() >= 2 && right.size() >= 2 && imus.size() >= 2; });
+    complete = changed.wait_for(lock, std::chrono::seconds(15), [&] {
+      return left.size() >= 2 && right.size() >= 2 && imus.size() >= 2 &&
+             status_snapshot.find("\"decoded_images\":2") != std::string::npos &&
+             status_snapshot.find("\"pending_decode_images\":0") != std::string::npos &&
+             status_snapshot.find("\"decoder_inflight\":false") != std::string::npos;
+    });
   }
   executor.cancel(); spin.join();
   EXPECT_TRUE(complete);
+  EXPECT_NE(status_snapshot.find("\"image_queue_overflow\":0"), std::string::npos);
   ASSERT_EQ(left.size(), 2u); ASSERT_EQ(right.size(), 2u); ASSERT_EQ(imus.size(), 2u);
   constexpr double pi = 3.14159265358979323846;
   for (size_t i = 0; i < 2; ++i)
