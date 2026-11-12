@@ -1,68 +1,37 @@
+cmake_minimum_required(VERSION 3.22)
 project(vikit_common)
-cmake_minimum_required(VERSION 2.8.3)
-find_package(yaml-cpp)
-find_package(catkin_simple REQUIRED)
-catkin_simple(ALL_DEPS_REQUIRED)
-set(OpenCV_DIR /usr/share/OpenCV)
-find_package(OpenCV REQUIRED)
-
-if(${OpenCV_VERSION} STREQUAL "3.2.0")
-  message(STATUS "OpenCV version ${OpenCV_VERSION}")
-else()
-  message(WARNING "OpenCV version ${OpenCV_VERSION}, OpenCV version must be 3.2.0")
-endif()
-
+find_package(ament_cmake REQUIRED)
+find_package(cv_bridge REQUIRED)
+find_package(minkindr_vendor REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(svo_cmake REQUIRED)
 include(SvoSetup)
 
-set(HEADERS
-  include/vikit/blender_utils.h
-  include/vikit/math_utils.h
-  include/vikit/performance_monitor.h
-  include/vikit/ringbuffer.h
-  include/vikit/sample.h
-  include/vikit/timer.h
-  include/vikit/user_input_thread.h
-  include/vikit/vision.h
-  include/vikit/homography_decomp.h
-  include/vikit/homography.h
-  include/vikit/path_utils.h
-  include/vikit/csv_utils.h
-  include/aslam/common/entrypoint.h
-  include/aslam/common/macros.h
-  include/aslam/common/memory.h
-  include/aslam/common/pose-types.h
-  include/aslam/common/yaml-serialization.h
-  include/aslam/common/yaml-serialization-eigen.h
-  )
-
-set(SOURCES
+add_library(${PROJECT_NAME} SHARED
   src/homography.cpp
   src/math_utils.cpp
   src/performance_monitor.cpp
   src/sample.cpp
   src/user_input_thread.cpp
   src/vision.cpp
-  )
-
-# Create vikit shared library
-cs_add_library(${PROJECT_NAME} ${SOURCES} ${HEADERS})
-target_link_libraries(${PROJECT_NAME} ${OpenCV_LIBRARIES})
-################################################################################
-# Unit tests
-catkin_add_gtest(homography test/test_homography.cpp)
-target_link_libraries(homography gtest ${PROJECT_NAME})
-
-catkin_add_gtest(math_utils test/test_math_utils.cpp)
-target_link_libraries(math_utils gtest ${PROJECT_NAME})
-
-################################################################################
-# Other tests
-cs_add_executable(vikit_test_timer test/test_timer.cpp)
-target_link_libraries(vikit_test_timer ${PROJECT_NAME})
-
-cs_add_executable(vikit_test_common test/test_common.cpp)
-target_link_libraries(vikit_test_common ${PROJECT_NAME})
-
-################################################################################
-cs_install()
-cs_export()
+)
+svo_target(${PROJECT_NAME})
+ament_target_dependencies(${PROJECT_NAME} PUBLIC cv_bridge minkindr_vendor rclcpp svo_cmake)
+add_executable(vikit_test_timer test/test_timer.cpp)
+target_link_libraries(vikit_test_timer PRIVATE ${PROJECT_NAME})
+install(TARGETS vikit_test_timer DESTINATION lib/${PROJECT_NAME})
+add_executable(vikit_test_common test/test_common.cpp)
+target_link_libraries(vikit_test_common PRIVATE ${PROJECT_NAME})
+install(TARGETS vikit_test_common DESTINATION lib/${PROJECT_NAME})
+if(BUILD_TESTING)
+  find_package(ament_cmake_gtest REQUIRED)
+  ament_add_gtest(homography test/test_homography.cpp)
+  target_link_libraries(homography ${PROJECT_NAME})
+  ament_add_gtest(math_utils test/test_math_utils.cpp)
+  target_link_libraries(math_utils ${PROJECT_NAME})
+endif()
+install(TARGETS ${PROJECT_NAME} EXPORT export_${PROJECT_NAME} ARCHIVE DESTINATION lib LIBRARY DESTINATION lib RUNTIME DESTINATION bin)
+install(DIRECTORY include/ DESTINATION include)
+ament_export_targets(export_${PROJECT_NAME} HAS_LIBRARY_TARGET)
+ament_export_dependencies(cv_bridge minkindr_vendor rclcpp svo_cmake Eigen3 glog gflags yaml-cpp OpenCV Threads)
+ament_package()

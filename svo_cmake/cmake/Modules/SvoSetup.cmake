@@ -1,34 +1,40 @@
-SET(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-SET(CMAKE_BUILD_TYPE Release) # Release, RelWithDebInfo
-#SET(CMAKE_BUILD_TYPE Debug) # Release, RelWithDebInfo
-SET(CMAKE_VERBOSE_MAKEFILE OFF)
-
-# user build settings
-SET(USE_LOOP_CLOSING TRUE)
-SET(USE_GLOBAL_MAP FALSE)
-
-# Set definitions
-IF(USE_LOOP_CLOSING)
-  ADD_DEFINITIONS(-DSVO_LOOP_CLOSING)
-ENDIF()
-
-IF(USE_GLOBAL_MAP)
-  ADD_DEFINITIONS(-DSVO_GLOBAL_MAP)
-ENDIF()
-
-ADD_DEFINITIONS(-DSVO_USE_ROS)
-ADD_DEFINITIONS(-DSVO_USE_OPENGV)
-ADD_DEFINITIONS(-DSVO_DEPTHFILTER_IN_REPROJECTOR)
-
-#############################################################################
-# Set build flags, set ARM_ARCHITECTURE environment variable on Odroid
-SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread -Wall -Werror -D_LINUX -D_REENTRANT -march=native -Wno-unused-variable -Wno-unused-but-set-variable -Wno-unknown-pragmas -Wno-unused-but-set-parameter -Wno-int-in-bool-context -Wno-maybe-uninitialized -Wno-unused-function")
-
-IF(DEFINED ENV{ARM_ARCHITECTURE})
-  SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mfpu=neon -march=armv7-a")
-  ADD_DEFINITIONS(-DHAVE_FAST_NEON)
-ELSE()
-  SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mmmx -msse -msse2 -msse3 -mssse3 -mno-avx")
-ENDIF()
-SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14")
-SET(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS} -O3 -fsee -fomit-frame-pointer -fno-signed-zeros -fno-math-errno -funroll-loops -ffast-math -fno-finite-math-only")
+# Common native ROS 2 build policy, applied to targets rather than global flags.
+include_guard(GLOBAL)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+if(NOT CMAKE_BUILD_TYPE)
+  set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
+endif()
+option(USE_SCHUR_VINS "Use the stereo SchurVINS estimator" ON)
+option(USE_LOOP_CLOSING "Enable online loop closing" ON)
+option(USE_GLOBAL_MAP "Enable global map optimization" OFF)
+set(OpenCV_DIR "/usr/lib/x86_64-linux-gnu/cmake/opencv4" CACHE PATH "System OpenCV 4.6 configuration")
+find_package(Eigen3 3.4 REQUIRED NO_MODULE)
+find_package(OpenCV 4.6 REQUIRED COMPONENTS core imgproc imgcodecs highgui calib3d features2d video)
+if(NOT OpenCV_VERSION VERSION_LESS 4.7)
+  message(FATAL_ERROR "SchurVINS requires the system OpenCV 4.6, got ${OpenCV_VERSION}")
+endif()
+find_package(glog REQUIRED)
+find_package(gflags REQUIRED)
+find_package(yaml-cpp CONFIG REQUIRED)
+find_package(Threads REQUIRED)
+function(svo_target target)
+  target_compile_features(${target} PUBLIC cxx_std_17)
+  target_compile_options(${target} PRIVATE -Wall -Wextra -Wno-unused-parameter)
+  target_compile_definitions(${target} PUBLIC SVO_USE_OPENGV SVO_DEPTHFILTER_IN_REPROJECTOR)
+  if(USE_SCHUR_VINS)
+    target_compile_definitions(${target} PUBLIC USE_SCHUR_VINS)
+  endif()
+  if(USE_LOOP_CLOSING)
+    target_compile_definitions(${target} PUBLIC SVO_LOOP_CLOSING)
+  endif()
+  if(USE_GLOBAL_MAP)
+    target_compile_definitions(${target} PUBLIC SVO_GLOBAL_MAP)
+  endif()
+  target_include_directories(${target} PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include> ${OpenCV_INCLUDE_DIRS})
+  target_link_libraries(${target} PUBLIC Eigen3::Eigen glog::glog gflags yaml-cpp Threads::Threads ${OpenCV_LIBRARIES})
+endfunction()

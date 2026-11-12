@@ -1,53 +1,34 @@
+cmake_minimum_required(VERSION 3.22)
 project(svo_common)
-cmake_minimum_required(VERSION 2.8.3)
-
-find_package(catkin_simple REQUIRED)
-catkin_simple()
-
+find_package(ament_cmake REQUIRED)
+find_package(fast_neon_vendor REQUIRED)
+find_package(minkindr_vendor REQUIRED)
+find_package(svo_cmake REQUIRED)
+find_package(vikit_cameras REQUIRED)
+find_package(vikit_common REQUIRED)
 include(SvoSetup)
 
-set(HEADERS
-  include/svo/common/camera.h
-  include/svo/common/camera_fwd.h
-  include/svo/common/feature_wrapper.h
-  include/svo/common/frame.h
-  include/svo/common/imu_calibration.h
-  include/svo/common/logging.h
-  include/svo/common/occupancy_grid_2d.h
-  include/svo/common/point.h
-  include/svo/common/seed.h
-  include/svo/common/transformation.h
-  include/svo/common/local_feature.h
-  include/svo/common/types.h
-  )
-
-set(SOURCES
+add_library(${PROJECT_NAME} SHARED
   src/frame.cpp
   src/point.cpp
   src/local_feature.cpp
-  )
-
-cs_add_library(${PROJECT_NAME} ${SOURCES} ${HEADERS})
-
-################################################################################
-# TESTS
-
-################################################################################
-###
-### GTEST
-###
-
-catkin_add_gtest(${PROJECT_NAME}-test
+)
+svo_target(${PROJECT_NAME})
+ament_target_dependencies(${PROJECT_NAME} PUBLIC fast_neon_vendor minkindr_vendor svo_cmake vikit_cameras vikit_common)
+if(BUILD_TESTING)
+  find_package(ament_cmake_gtest REQUIRED)
+  ament_add_gtest(${PROJECT_NAME}-test
   test/test_main.cpp
   test/test_feature_wrapper.cpp
 )
-target_link_libraries(${PROJECT_NAME}-test ${PROJECT_NAME} pthread)
-
-catkin_add_gtest(container-helpers-test
+  target_link_libraries(${PROJECT_NAME}-test ${PROJECT_NAME})
+  ament_add_gtest(container-helpers-test
   test/test_container_helpers.cpp
 )
-target_link_libraries(container-helpers-test ${PROJECT_NAME})
-
-################################################################################
-cs_install()
-cs_export()
+  target_link_libraries(container-helpers-test ${PROJECT_NAME})
+endif()
+install(TARGETS ${PROJECT_NAME} EXPORT export_${PROJECT_NAME} ARCHIVE DESTINATION lib LIBRARY DESTINATION lib RUNTIME DESTINATION bin)
+install(DIRECTORY include/ DESTINATION include)
+ament_export_targets(export_${PROJECT_NAME} HAS_LIBRARY_TARGET)
+ament_export_dependencies(fast_neon_vendor minkindr_vendor svo_cmake vikit_cameras vikit_common Eigen3 glog gflags yaml-cpp OpenCV Threads)
+ament_package()

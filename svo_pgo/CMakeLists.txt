@@ -1,24 +1,26 @@
+cmake_minimum_required(VERSION 3.22)
 project(svo_pgo)
-cmake_minimum_required(VERSION 2.8.3)
-
-find_package(catkin_simple REQUIRED)
-catkin_simple()
-
+find_package(ament_cmake REQUIRED)
+find_package(ament_index_cpp REQUIRED)
+find_package(cv_bridge REQUIRED)
+find_package(minkindr_vendor REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(svo_cmake REQUIRED)
+find_package(svo_common REQUIRED)
 include(SvoSetup)
+find_package(Ceres 2.2 REQUIRED)
 
-set(HEADERS
-  include/svo/pgo/pgo.h
-  )
-
-set(SOURCES
+add_library(${PROJECT_NAME} SHARED
   src/pgo.cpp
-  )
-
-#add_executable(svo_online_loopclosing ${SOURCES} ${HEADERS})
-cs_add_library(${PROJECT_NAME} ${SOURCES} ${HEADERS})
-
-cs_add_executable(test_pgo test/test.cpp)
-target_link_libraries(test_pgo ${PROJECT_NAME})
-
-cs_install()
-cs_export()
+)
+svo_target(${PROJECT_NAME})
+ament_target_dependencies(${PROJECT_NAME} PUBLIC ament_index_cpp cv_bridge minkindr_vendor rclcpp svo_cmake svo_common)
+target_link_libraries(${PROJECT_NAME} PUBLIC Ceres::ceres)
+add_executable(test_pgo test/test.cpp)
+target_link_libraries(test_pgo PRIVATE ${PROJECT_NAME})
+install(TARGETS test_pgo DESTINATION lib/${PROJECT_NAME})
+install(TARGETS ${PROJECT_NAME} EXPORT export_${PROJECT_NAME} ARCHIVE DESTINATION lib LIBRARY DESTINATION lib RUNTIME DESTINATION bin)
+install(DIRECTORY include/ DESTINATION include)
+ament_export_targets(export_${PROJECT_NAME} HAS_LIBRARY_TARGET)
+ament_export_dependencies(ament_index_cpp cv_bridge minkindr_vendor rclcpp svo_cmake svo_common Eigen3 glog gflags yaml-cpp OpenCV Threads Ceres)
+ament_package()

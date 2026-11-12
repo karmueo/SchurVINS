@@ -5,7 +5,7 @@
 
 #include <random>
 
-#include <eigen-checks/gtest.h>
+#include <vikit/eigen_checks.h>
 #include <svo/common/feature_wrapper.h>
 
 template<class T>

@@ -4,45 +4,23 @@
 
 #include <glog/logging.h>
 #include <opencv2/opencv.hpp>
-#ifdef SVO_USE_ROS
-# include <ros/package.h>
-# include <vikit/params_helper.h>
-#endif
+#include <cstdlib>
+#include <stdexcept>
 
 namespace svo {
 namespace test_utils {
 
 std::string getDatasetDir()
 {
-  const char* env_dir = std::getenv("SVO_DATASET_DIR");
-#ifdef SVO_USE_ROS
-  std::string dataset_dir(ros::package::getPath("svo")+"/test/data");
-  if(env_dir != NULL)
-    dataset_dir = std::string(env_dir);
-  return dataset_dir;
-#else
-  return std::string(env_dir);
-#endif
+  const char* dir = std::getenv("SVO_DATASET_DIR");
+  if (!dir) throw std::runtime_error("Set SVO_DATASET_DIR to the external test dataset");
+  return dir;
 }
-
-std::string getTestDataDir()
-{
-#ifdef SVO_USE_ROS
-  return std::string(ros::package::getPath("svo_experiments")+"/data");
-#else
-  const char* env_dir = std::getenv("SVO_DATASET_DIR");
-  return std::string(env_dir);
-#endif
-}
-
+std::string getTestDataDir() { return getDatasetDir(); }
 std::string getTraceDir()
 {
-#ifdef SVO_USE_ROS
-  std::string default_dir(ros::package::getPath("svo_experiments")+"/results");
-  return vk::getParam<std::string>("svo/trace_dir", default_dir);
-#else
-  return "/tmp";
-#endif
+  const char* dir = std::getenv("SVO_TEST_OUTPUT_DIR");
+  return dir ? dir : "/tmp";
 }
 
 VectorStats computeStats(std::vector<double>& v)

@@ -1,0 +1,6 @@
+<?xml version="1.0"?>
+<package format="3"><name>fast_neon_vendor</name><version>0.1.0</version>
+<description>Native ament wrapper of locked fast_neon source; no configure-time downloads.</description>
+<maintainer email="forster@ifi.uzh.ch">SchurVINS contributors</maintainer><license>BSD</license>
+<buildtool_depend>ament_cmake</buildtool_depend><depend>eigen</depend><depend>libgoogle-glog-dev</depend>
+<export><build_type>ament_cmake</build_type></export></package>

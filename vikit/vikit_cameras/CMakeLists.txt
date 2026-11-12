@@ -1,34 +1,13 @@
+cmake_minimum_required(VERSION 3.22)
 project(vikit_cameras)
-cmake_minimum_required (VERSION 2.8.3)
-find_package(yaml-cpp)
-find_package(catkin_simple REQUIRED)
-catkin_simple(ALL_DEPS_REQUIRED)
-
+find_package(ament_cmake REQUIRED)
+find_package(cv_bridge REQUIRED)
+find_package(minkindr_vendor REQUIRED)
+find_package(svo_cmake REQUIRED)
+find_package(vikit_common REQUIRED)
 include(SvoSetup)
 
-set(HEADERS
-  include/vikit/cameras.h
-  include/vikit/cameras/camera_geometry_base.h
-  include/vikit/cameras/implementation/camera_geometry_base.hpp
-  include/vikit/cameras/no_distortion.h
-  include/vikit/cameras/atan_distortion.h
-  include/vikit/cameras/equidistant_distortion.h
-  include/vikit/cameras/equidistant_fisheye_geometry.h
-  include/vikit/cameras/equidistant_fisheye_projection.h
-  include/vikit/cameras/omni_geometry.h
-  include/vikit/cameras/omni_projection.h
-  include/vikit/cameras/radial_tangential_distortion.h
-  include/vikit/cameras/pinhole_projection.h
-  include/vikit/cameras/implementation/pinhole_projection.hpp
-  include/vikit/cameras/camera_geometry.h
-  include/vikit/cameras/implementation/camera_geometry.hpp
-  include/vikit/cameras/camera_factory.h
-  include/vikit/cameras/ncamera.h
-  include/vikit/cameras/yaml/camera-yaml-serialization.h
-  include/vikit/cameras/yaml/ncamera-yaml-serialization.h
-  )
-
-set(SOURCES
+add_library(${PROJECT_NAME} SHARED
   src/camera_factory.cpp
   src/ncamera.cpp
   src/camera_geometry_base.cpp
@@ -38,21 +17,20 @@ set(SOURCES
   src/omni_geometry.cpp
   src/omni_projection.cpp
   src/ncamera_yaml_serialization.cpp
-  )
-
-cs_add_library(${PROJECT_NAME} ${SOURCES} ${HEADERS})
-target_link_libraries(${PROJECT_NAME} yaml-cpp)
-
-################################################################################
-# Tests
-
-catkin_add_gtest(${PROJECT_NAME}_tests
-  test/test_cameras
 )
-target_link_libraries(${PROJECT_NAME}_tests ${PROJECT_NAME})
-
-################################################################################
-# Install
-
-cs_install()
-cs_export()
+svo_target(${PROJECT_NAME})
+ament_target_dependencies(${PROJECT_NAME} PUBLIC cv_bridge minkindr_vendor svo_cmake vikit_common)
+if(BUILD_TESTING)
+  find_package(ament_cmake_gtest REQUIRED)
+  ament_add_gtest(equidistant_ego test/test_equidistant_ego.cpp)
+  target_link_libraries(equidistant_ego ${PROJECT_NAME})
+  ament_add_gtest(${PROJECT_NAME}_tests
+  test/test_cameras.cpp
+)
+  target_link_libraries(${PROJECT_NAME}_tests ${PROJECT_NAME})
+endif()
+install(TARGETS ${PROJECT_NAME} EXPORT export_${PROJECT_NAME} ARCHIVE DESTINATION lib LIBRARY DESTINATION lib RUNTIME DESTINATION bin)
+install(DIRECTORY include/ DESTINATION include)
+ament_export_targets(export_${PROJECT_NAME} HAS_LIBRARY_TARGET)
+ament_export_dependencies(cv_bridge minkindr_vendor svo_cmake vikit_common Eigen3 glog gflags yaml-cpp OpenCV Threads)
+ament_package()

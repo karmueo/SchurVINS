@@ -1,0 +1,47 @@
+{
+  "sources": {
+    "minkindr": {
+      "url": "https://github.com/ethz-asl/minkindr.git",
+      "commit": "564f12639a8447d4d3e5e7707851424302941056"
+    },
+    "fast_neon": {
+      "url": "https://github.com/uzh-rpg/fast_neon.git",
+      "commit": "4914ed963aba8d2bb476551e186e4b20a206f03d"
+    },
+    "DBoW2": {
+      "url": "https://github.com/dorian3d/DBoW2.git",
+      "commit": "3924753db6145f12618e7de09b7e6b258db93c6e"
+    }
+  },
+  "system": {
+    "Eigen": "3.4",
+    "OpenCV": "4.6",
+    "Ceres": "2.2",
+    "yaml-cpp": "0.8",
+    "GTSAM": "4.2",
+    "OpenGV": "Ubuntu Noble libopengv-dev 1.0+1git91f4b1-7.1build1"
+  },
+  "resources": {
+    "vocabularies": {
+      "url": "https://rpg.ifi.uzh.ch/svo2/vocabularies.tar.gz",
+      "sha256": "9265bead3a209239c8f016e1b986ce6ad1c4f16856a6174722670ac43dbe4a35",
+      "files": [
+        "voc_MH01_9X3.yml.gz",
+        "voc_VI01_9X5.yml.gz",
+        "voc_VI01_8X4.yml.gz",
+        "voc_FR_9X3.yml.gz",
+        "voc_MH01_10X6.yml.gz",
+        "voc_VI01_10X6.yml.gz",
+        "voc_MH01_9X5.yml.gz",
+        "voc_MH01_8X4.yml.gz",
+        "voc_MH01_7X3.yml.gz",
+        "voc_FR_9X5.yml.gz",
+        "voc_FR_8X4.yml.gz",
+        "voc_FR_7X3.yml.gz",
+        "voc_RPG_8X4.yml.gz",
+        "voc_GEN_8X4.yml.gz",
+        "voc_FR_10X6.yml.gz"
+      ]
+    }
+  }
+}

@@ -1,36 +1,18 @@
-cmake_minimum_required(VERSION 2.8.3)
+cmake_minimum_required(VERSION 3.22)
 project(vikit_solver)
-find_package(catkin_simple REQUIRED)
-find_package(yaml-cpp)
-catkin_simple(ALL_DEPS_REQUIRED)
+find_package(ament_cmake REQUIRED)
+find_package(minkindr_vendor REQUIRED)
+find_package(svo_cmake REQUIRED)
+include(SvoSetup)
 
-SET(CMAKE_BUILD_TYPE Release) # Release, RelWithDebInfo
-SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -std=c++11")
-
-#############
-# LIBRARIES #
-#############
-cs_add_library(${PROJECT_NAME}
-  include/vikit/solver/mini_least_squares_solver.h
-  include/vikit/solver/implementation/mini_least_squares_solver.hpp
+add_library(${PROJECT_NAME} SHARED
   src/robust_cost.cpp
-  include/vikit/solver/robust_cost.h
+  src/elevation_map_node.cpp
 )
-
-## Declare a cpp executable
-#cs_add_executable(elevation_map_node src/elevation_map_node.cpp)
-#target_link_libraries(elevation_map_node ${PROJECT_NAME})
-
-##########
-# GTESTS #
-##########
-#catkin_add_gtest(test_cameras
-#    test/test-cameras.cc
-#)
-#target_link_libraries(test_cameras ${PROJECT_NAME}) 
-
-##########
-# EXPORT #
-##########
-cs_install()
-cs_export()
+svo_target(${PROJECT_NAME})
+ament_target_dependencies(${PROJECT_NAME} PUBLIC minkindr_vendor svo_cmake)
+install(TARGETS ${PROJECT_NAME} EXPORT export_${PROJECT_NAME} ARCHIVE DESTINATION lib LIBRARY DESTINATION lib RUNTIME DESTINATION bin)
+install(DIRECTORY include/ DESTINATION include)
+ament_export_targets(export_${PROJECT_NAME} HAS_LIBRARY_TARGET)
+ament_export_dependencies(minkindr_vendor svo_cmake Eigen3 glog gflags yaml-cpp OpenCV Threads)
+ament_package()

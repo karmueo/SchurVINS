@@ -1,25 +1,24 @@
+cmake_minimum_required(VERSION 3.22)
 project(vikit_ros)
-cmake_minimum_required(VERSION 2.8.3)
-find_package(yaml-cpp)
-find_package(catkin_simple REQUIRED)
-catkin_simple(ALL_DEPS_REQUIRED)
-
+find_package(ament_cmake REQUIRED)
+find_package(cv_bridge REQUIRED)
+find_package(minkindr_vendor REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(sensor_msgs REQUIRED)
+find_package(svo_cmake REQUIRED)
+find_package(tf2_ros REQUIRED)
+find_package(vikit_common REQUIRED)
+find_package(visualization_msgs REQUIRED)
 include(SvoSetup)
 
-set(HEADERS
-  include/vikit/img_type_conversion.h
-  include/vikit/output_helper.h
-  include/vikit/params_helper.h
-  )
-
-set(SOURCES
+add_library(${PROJECT_NAME} SHARED
   src/output_helper.cpp
   src/img_type_conversion.cpp
-  )
-
-# Create vikit library
-cs_add_library(${PROJECT_NAME} ${SOURCES} ${HEADERS})
-
-################################################################################
-cs_install()
-cs_export()
+)
+svo_target(${PROJECT_NAME})
+ament_target_dependencies(${PROJECT_NAME} PUBLIC cv_bridge minkindr_vendor rclcpp sensor_msgs svo_cmake tf2_ros vikit_common visualization_msgs)
+install(TARGETS ${PROJECT_NAME} EXPORT export_${PROJECT_NAME} ARCHIVE DESTINATION lib LIBRARY DESTINATION lib RUNTIME DESTINATION bin)
+install(DIRECTORY include/ DESTINATION include)
+ament_export_targets(export_${PROJECT_NAME} HAS_LIBRARY_TARGET)
+ament_export_dependencies(cv_bridge minkindr_vendor rclcpp sensor_msgs svo_cmake tf2_ros vikit_common visualization_msgs Eigen3 glog gflags yaml-cpp OpenCV Threads)
+ament_package()

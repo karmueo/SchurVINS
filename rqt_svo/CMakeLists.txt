@@ -1,24 +1,10 @@
-cmake_minimum_required(VERSION 2.8.3)
+cmake_minimum_required(VERSION 3.22)
 project(rqt_svo)
-
-IF(NOT DEFINED ENV{ARM_ARCHITECTURE})
-  find_package(catkin REQUIRED COMPONENTS
-    rospy
-    rqt_gui
-    rqt_gui_py
-  )
-  catkin_package()
-  catkin_python_setup()
-
-  install(FILES plugin.xml
-    DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
-  )
-
-  install(DIRECTORY resource
-    DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
-  )
-
-  install(PROGRAMS scripts/rqt_svo
-    DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
-  )
-ENDIF()
+find_package(ament_cmake REQUIRED)
+find_package(ament_cmake_python REQUIRED)
+ament_python_install_package(rqt_svo PACKAGE_DIR src/rqt_svo)
+install(DIRECTORY scripts/ DESTINATION share/${PROJECT_NAME}/scripts USE_SOURCE_PERMISSIONS)
+install(DIRECTORY resource/ DESTINATION share/${PROJECT_NAME}/resource USE_SOURCE_PERMISSIONS)
+install(FILES plugin.xml DESTINATION share/${PROJECT_NAME})
+install(PROGRAMS scripts/rqt_svo DESTINATION lib/${PROJECT_NAME})
+ament_package()

@@ -1,53 +1,13 @@
 repositories:
-  catkin_simple:
-    type: git
-    url: https://github.com/catkin/catkin_simple.git
-    version: master
-  cmake_external_project_catkin:
-    type: git
-    url: https://github.com/zurich-eye/cmake_external_project_catkin.git
-    version: master
-  eigen_catkin:
-    type: git
-    url: https://github.com/ethz-asl/eigen_catkin.git
-    version: master
-  eigen_checks:
-    type: git
-    url: https://github.com/ethz-asl/eigen_checks.git
-    version: master
-  fast_neon:
-    type: git
-    url: https://github.com/uzh-rpg/fast_neon.git
-    version: master
-  gflags_catkin:
-    type: git
-    url: https://github.com/ethz-asl/gflags_catkin.git
-    version: master
-  glog_catkin:
-    type: git
-    url: https://github.com/ethz-asl/glog_catkin.git
-    version: master
   minkindr:
     type: git
     url: https://github.com/ethz-asl/minkindr.git
-    version: master
-  opengv:
+    version: 564f12639a8447d4d3e5e7707851424302941056
+  fast_neon:
     type: git
-    url: https://github.com/ethz-asl/opengv.git
-    version: master
-  minkindr_ros:
+    url: https://github.com/uzh-rpg/fast_neon.git
+    version: 4914ed963aba8d2bb476551e186e4b20a206f03d
+  DBoW2:
     type: git
-    url: https://github.com/ethz-asl/minkindr_ros.git
-    version: master
-  ceres_catkin:
-    type: git
-    url: https://github.com/ethz-asl/ceres_catkin.git
-    version: master
-  dbow2_catkin:
-    type: git
-    url: https://github.com/uzh-rpg/dbow2_catkin.git
-    version: master
-  rpg_trajectory_evaluation:
-    type: git
-    url: https://github.com/uzh-rpg/rpg_trajectory_evaluation.git
-    version: dev
+    url: https://github.com/dorian3d/DBoW2.git
+    version: 3924753db6145f12618e7de09b7e6b258db93c6e

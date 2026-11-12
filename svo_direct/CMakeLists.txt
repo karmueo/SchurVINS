@@ -1,34 +1,17 @@
+cmake_minimum_required(VERSION 3.22)
 project(svo_direct)
-cmake_minimum_required(VERSION 2.8.3)
-
-find_package(catkin_simple REQUIRED)
-catkin_simple(ALL_DEPS_REQUIRED)
-set(OpenCV_DIR /usr/share/OpenCV)
-find_package(OpenCV REQUIRED)
-
-if(${OpenCV_VERSION} STREQUAL "3.2.0")
-  message(STATUS "OpenCV version ${OpenCV_VERSION}")
-else()
-  message(WARNING "OpenCV version ${OpenCV_VERSION}, OpenCV version must be 3.2.0")
-endif()
-
+find_package(ament_cmake REQUIRED)
+find_package(ament_index_cpp REQUIRED)
+find_package(cv_bridge REQUIRED)
+find_package(minkindr_vendor REQUIRED)
+find_package(svo_cmake REQUIRED)
+find_package(svo_common REQUIRED)
+find_package(svo_test_utils REQUIRED)
+find_package(vikit_ros REQUIRED)
+find_package(vikit_solver REQUIRED)
 include(SvoSetup)
 
-set(HEADERS
-  include/svo/direct/patch_warp.h
-  include/svo/direct/patch_score.h
-  include/svo/direct/patch_utils.h
-  include/svo/direct/feature_alignment.h
-  include/svo/direct/feature_detection_types.h
-  include/svo/direct/feature_detection.h
-  include/svo/direct/feature_detection_utils.h
-  include/svo/direct/matcher.h
-  include/svo/direct/depth_filter.h
-  include/svo/direct/depth_estimation.h
-  include/svo/direct/elder_zucker.h
-)
-
-set(SOURCES
+add_library(${PROJECT_NAME} SHARED
   src/patch_warp.cpp
   src/feature_alignment.cpp
   src/feature_detection.cpp
@@ -37,36 +20,32 @@ set(SOURCES
   src/depth_filter.cpp
   src/depth_estimation.cpp
   src/elder_zucker.cpp
-  )
-
-cs_add_library(${PROJECT_NAME} ${SOURCES} ${HEADERS})
-target_link_libraries(${PROJECT_NAME} ${OpenCV_LIBRARIES})
-
-cs_add_executable(svo_test_patch_score test/test_patch_score.cpp)
-target_link_libraries(svo_test_patch_score ${PROJECT_NAME})
-
-cs_add_executable(svo_test_edgelet_direction test/test_edgelet_direction.cpp)
-target_link_libraries(svo_test_edgelet_direction ${PROJECT_NAME})
-
-cs_add_executable(svo_test_edgelet_extraction test/test_edgelet_extraction.cpp)
-target_link_libraries(svo_test_edgelet_extraction ${PROJECT_NAME})
-
-cs_add_executable(svo_test_feature_alignment test/test_feature_alignment.cpp)
-target_link_libraries(svo_test_feature_alignment ${PROJECT_NAME})
-
-################################################################################
-###
-### GTEST
-###
-
-catkin_add_gtest(${PROJECT_NAME}-test-depth-estimation
+)
+svo_target(${PROJECT_NAME})
+ament_target_dependencies(${PROJECT_NAME} PUBLIC ament_index_cpp cv_bridge minkindr_vendor svo_cmake svo_common svo_test_utils vikit_ros vikit_solver)
+target_compile_options(${PROJECT_NAME} PRIVATE $<$<STREQUAL:${CMAKE_SYSTEM_PROCESSOR},x86_64>:-mssse3>)
+add_executable(svo_test_patch_score test/test_patch_score.cpp)
+target_link_libraries(svo_test_patch_score PRIVATE ${PROJECT_NAME})
+install(TARGETS svo_test_patch_score DESTINATION lib/${PROJECT_NAME})
+add_executable(svo_test_edgelet_direction test/test_edgelet_direction.cpp)
+target_link_libraries(svo_test_edgelet_direction PRIVATE ${PROJECT_NAME})
+install(TARGETS svo_test_edgelet_direction DESTINATION lib/${PROJECT_NAME})
+add_executable(svo_test_edgelet_extraction test/test_edgelet_extraction.cpp)
+target_link_libraries(svo_test_edgelet_extraction PRIVATE ${PROJECT_NAME})
+install(TARGETS svo_test_edgelet_extraction DESTINATION lib/${PROJECT_NAME})
+add_executable(svo_test_feature_alignment test/test_feature_alignment.cpp)
+target_link_libraries(svo_test_feature_alignment PRIVATE ${PROJECT_NAME})
+install(TARGETS svo_test_feature_alignment DESTINATION lib/${PROJECT_NAME})
+if(BUILD_TESTING)
+  find_package(ament_cmake_gtest REQUIRED)
+  ament_add_gtest(${PROJECT_NAME}-test-depth-estimation
   test/test_depth_estimation.cpp
   test/test_utils.h
 )
-target_link_libraries(${PROJECT_NAME}-test-depth-estimation ${PROJECT_NAME} pthread)
-
-
-################################################################################
-cs_install()
-cs_export()
-
+  target_link_libraries(${PROJECT_NAME}-test-depth-estimation ${PROJECT_NAME})
+endif()
+install(TARGETS ${PROJECT_NAME} EXPORT export_${PROJECT_NAME} ARCHIVE DESTINATION lib LIBRARY DESTINATION lib RUNTIME DESTINATION bin)
+install(DIRECTORY include/ DESTINATION include)
+ament_export_targets(export_${PROJECT_NAME} HAS_LIBRARY_TARGET)
+ament_export_dependencies(ament_index_cpp cv_bridge minkindr_vendor svo_cmake svo_common svo_test_utils vikit_ros vikit_solver Eigen3 glog gflags yaml-cpp OpenCV Threads)
+ament_package()

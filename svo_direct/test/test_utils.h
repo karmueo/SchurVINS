@@ -16,7 +16,7 @@
 #include <glog/logging.h>
 #include <Eigen/Core>
 #include <opencv2/opencv.hpp>
-#include <ros/package.h>
+#include <ament_index_cpp/get_package_share_directory.hpp>
 #include <vikit/params_helper.h>
 #include <svo/common/camera.h>
 
@@ -129,7 +129,7 @@ private:
 inline std::string getDatasetDir()
 {
   const char* env_dir = std::getenv("SVO_DATASET_DIR");
-  std::string dataset_dir(ros::package::getPath("svo")+"/test/data");
+  std::string dataset_dir(ament_index_cpp::get_package_share_directory("svo")+"/test/data");
   if(env_dir != NULL)
     dataset_dir = std::string(env_dir);
   return dataset_dir;
@@ -138,7 +138,7 @@ inline std::string getDatasetDir()
 inline std::string getTestDataDir()
 {
 #if 1
-  return std::string(ros::package::getPath("svo")+"/test/data");
+  return std::string(ament_index_cpp::get_package_share_directory("svo")+"/test/data");
 #else
   const char* env_dir = std::getenv("SVO_DATASET_DIR");
   return std::string(env_dir);
@@ -148,8 +148,8 @@ inline std::string getTestDataDir()
 inline std::string getTraceDir()
 {
 #if 1
-  std::string default_dir(ros::package::getPath("svo")+"/test/results");
-  return vk::getParam<std::string>("svo/trace_dir", default_dir);
+  std::string default_dir(ament_index_cpp::get_package_share_directory("svo")+"/test/results");
+  return default_dir;
 #else
   return "/tmp";
 #endif

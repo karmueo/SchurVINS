@@ -29,7 +29,7 @@
 #include <svo/common/camera.h>
 #include <svo/common/transformation.h>
 
-#define USE_SCHUR_VINS
+// USE_SCHUR_VINS is selected by the exported CMake build option.
 
 namespace schur_vins {
 using Matrix15d = Eigen::Matrix<double, 15, 15>;

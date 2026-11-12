@@ -1,7 +1,7 @@
 #pragma once
 
 #include <Eigen/Dense>
-#include <eigen-checks/gtest.h>
+#include <vikit/eigen_checks.h>
 #include <glog/logging.h>
 
 namespace aslam {

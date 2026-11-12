@@ -1,6 +1,9 @@
 #pragma once
 
 #include <cmath>
+#include <algorithm>
+#include <limits>
+#include <stdexcept>
 #include <iostream>
 #include <Eigen/Core>
 #include <glog/logging.h>
@@ -96,17 +99,38 @@ public:
 
   inline void undistort(double& x, double& y) const
   {
-    const double thetad = std::sqrt(x * x + y * y);
-    double theta = thetad;
-    for (int i = 0; i < 5; ++i)
+    const double thetad = std::hypot(x, y);
+    if (!std::isfinite(thetad))
+      throw std::domain_error("Non-finite equidistant image coordinate");
+    // The optical axis is an exact fixed point (also avoids 0/0).
+    if (thetad <= std::numeric_limits<double>::epsilon())
+      return;
+    double lo = 0.0;
+    double hi = std::nextafter(0.5 * std::acos(-1.0), 0.0);
+    if (thetad_from_theta(hi) < thetad)
+      throw std::domain_error("Equidistant bearing lies outside the front hemisphere");
+    double theta = std::min(thetad, 0.5 * hi);
+    bool converged = false;
+    for (int iteration = 0; iteration < 80; ++iteration)
     {
-      const double theta2 = theta * theta;
-      const double theta4 = theta2 * theta2;
-      const double theta6 = theta4 * theta2;
-      const double theta8 = theta4 * theta4;
-      theta = thetad /
-              (1.0 + k1_ * theta2 + k2_ * theta4 + k3_ * theta6 + k4_ * theta8);
+      const double residual = thetad_from_theta(theta) - thetad;
+      if (std::abs(residual) <= 8.0 * std::numeric_limits<double>::epsilon() *
+                                    std::max(1.0, thetad))
+      {
+        converged = true;
+        break;
+      }
+      if (residual > 0.0) hi = theta;
+      else lo = theta;
+      const double derivative = deriv_thetad_from_theta(theta);
+      const double candidate = theta - residual / derivative;
+      // A bracketed Newton step retains bisection's convergence guarantee.
+      theta = std::isfinite(candidate) && derivative > 0.0 &&
+                      candidate > lo && candidate < hi
+                  ? candidate : 0.5 * (lo + hi);
     }
+    if (!converged)
+      throw std::runtime_error("Equidistant inverse failed to converge");
     const double scaling = std::tan(theta) / thetad;
     x *= scaling;
     y *= scaling;

@@ -1,37 +1,21 @@
+cmake_minimum_required(VERSION 3.22)
 project(svo_vio_common)
-cmake_minimum_required(VERSION 2.8.3)
+find_package(ament_cmake REQUIRED)
+find_package(geometry_msgs REQUIRED)
+find_package(minkindr_vendor REQUIRED)
+find_package(std_msgs REQUIRED)
+find_package(svo_cmake REQUIRED)
+find_package(svo_common REQUIRED)
+include(SvoSetup)
 
-find_package(catkin_simple REQUIRED)
-catkin_simple(ALL_DEPS_REQUIRED)
-
-list(APPEND catkin_LIBRARIES)
-
-#############
-# LIBRARIES #
-#############
-set(HEADERS
-  include/svo/vio_common/logging.hpp
-  include/svo/vio_common/matrix_operations.hpp
-  include/svo/vio_common/matrix.hpp
-  include/svo/vio_common/test_utils.hpp
-  include/svo/vio_common/backend_types.hpp
-  )
-
-set(SOURCES
+add_library(${PROJECT_NAME} SHARED
   src/vio_common.cpp
   src/test_utils.cpp
-  )
-
-cs_add_library(${PROJECT_NAME} ${SOURCES} ${HEADERS})
-
-
-##########
-# GTESTS #
-##########
-
-
-##########
-# EXPORT #
-##########
-cs_install()
-cs_export()
+)
+svo_target(${PROJECT_NAME})
+ament_target_dependencies(${PROJECT_NAME} PUBLIC geometry_msgs minkindr_vendor std_msgs svo_cmake svo_common)
+install(TARGETS ${PROJECT_NAME} EXPORT export_${PROJECT_NAME} ARCHIVE DESTINATION lib LIBRARY DESTINATION lib RUNTIME DESTINATION bin)
+install(DIRECTORY include/ DESTINATION include)
+ament_export_targets(export_${PROJECT_NAME} HAS_LIBRARY_TARGET)
+ament_export_dependencies(geometry_msgs minkindr_vendor std_msgs svo_cmake svo_common Eigen3 glog gflags yaml-cpp OpenCV Threads)
+ament_package()

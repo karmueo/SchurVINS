@@ -1,46 +1,33 @@
+cmake_minimum_required(VERSION 3.22)
 project(svo_online_loopclosing)
-cmake_minimum_required(VERSION 2.8.3)
-
-find_package(catkin_simple REQUIRED)
-catkin_simple(ALL_DEPS_REQUIRED)
-set(OpenCV_DIR /usr/share/OpenCV)
-find_package(OpenCV REQUIRED)
-
-if(${OpenCV_VERSION} STREQUAL "3.2.0")
-  message(STATUS "OpenCV version ${OpenCV_VERSION}")
-else()
-  message(WARNING "OpenCV version ${OpenCV_VERSION}, OpenCV version must be 3.2.0")
-endif()
-
+find_package(ament_cmake REQUIRED)
+find_package(ament_index_cpp REQUIRED)
+find_package(cv_bridge REQUIRED)
+find_package(dbow2_vendor REQUIRED)
+find_package(minkindr_vendor REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(rpg_common REQUIRED)
+find_package(svo_cmake REQUIRED)
+find_package(svo_common REQUIRED)
+find_package(svo_pgo REQUIRED)
 include(SvoSetup)
+find_package(opengv REQUIRED)
 
-set(HEADERS
-  include/svo/online_loopclosing/bow.h
-  include/svo/online_loopclosing/geometric_verification.h
-  include/svo/online_loopclosing/loop_closing.h
-  include/svo/online_loopclosing/read_file.h
-  include/svo/online_loopclosing/keyframe.h
-  include/svo/online_loopclosing/loop_closing_types.h
-  include/svo/online_loopclosing/map_alignment.h
-  )
-
-set(SOURCES
-  src/bow.cpp
+add_library(${PROJECT_NAME} SHARED
   src/geometric_verification.cpp
   src/loop_closing.cpp
   src/read_file.cpp
   src/map_alignment.cpp
-  )
-
-#add_executable(svo_online_loopclosing ${SOURCES} ${HEADERS})
-cs_add_library(${PROJECT_NAME} ${SOURCES} ${HEADERS})
-target_link_libraries(${PROJECT_NAME} ${OpenCV_LIBRARIES})
-
-cs_add_library(bow src/bow.cpp include/svo/online_loopclosing/bow.h)
-target_link_libraries(bow ${OpenCV_LIBRARIES})
-
-cs_add_executable(createvoc test/createvoc.cpp)
-target_link_libraries(createvoc bow)
-
-cs_install()
-cs_export()
+  src/bow.cpp
+)
+svo_target(${PROJECT_NAME})
+ament_target_dependencies(${PROJECT_NAME} PUBLIC ament_index_cpp cv_bridge dbow2_vendor minkindr_vendor rclcpp rpg_common svo_cmake svo_common svo_pgo)
+target_link_libraries(${PROJECT_NAME} PUBLIC opengv)
+add_executable(createvoc test/createvoc.cpp)
+target_link_libraries(createvoc PRIVATE ${PROJECT_NAME})
+install(TARGETS createvoc DESTINATION lib/${PROJECT_NAME})
+install(TARGETS ${PROJECT_NAME} EXPORT export_${PROJECT_NAME} ARCHIVE DESTINATION lib LIBRARY DESTINATION lib RUNTIME DESTINATION bin)
+install(DIRECTORY include/ DESTINATION include)
+ament_export_targets(export_${PROJECT_NAME} HAS_LIBRARY_TARGET)
+ament_export_dependencies(ament_index_cpp cv_bridge dbow2_vendor minkindr_vendor rclcpp rpg_common svo_cmake svo_common svo_pgo Eigen3 glog gflags yaml-cpp OpenCV Threads opengv)
+ament_package()

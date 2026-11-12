@@ -1,35 +1,13 @@
-cmake_minimum_required(VERSION 2.8.3)
+cmake_minimum_required(VERSION 3.22)
 project(svo_msgs)
-
-# search for everything we need to build the messages, dont forget the message_generation
-find_package(catkin REQUIRED COMPONENTS
-  message_generation
-  geometry_msgs
-  sensor_msgs
-)
-
-# search for all msg files
-FILE(GLOB messages_to_build RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}/msg"
-    "${CMAKE_CURRENT_SOURCE_DIR}/msg/*.msg")
-
-# notify catkin to look at the previously found msg files
-add_message_files(
-  FILES
-  ${messages_to_build}
-)
-
-# build the header files from the msg files, and notify catkin about the dependencies
-generate_messages(
-  DEPENDENCIES
-  geometry_msgs
-  sensor_msgs
-)
-
-# export the dependencis of this package for who ever depends on us
-catkin_package(
-  CATKIN_DEPENDS message_runtime geometry_msgs
-)
-
-include_directories(
-  ${catkin_INCLUDE_DIRS}
-)
+find_package(ament_cmake REQUIRED)
+find_package(rosidl_default_generators REQUIRED)
+find_package(std_msgs REQUIRED)
+find_package(geometry_msgs REQUIRED)
+find_package(sensor_msgs REQUIRED)
+rosidl_generate_interfaces(${PROJECT_NAME}
+  "msg/Feature.msg" "msg/Info.msg" "msg/DenseInput.msg"
+  "msg/DenseInputWithFeatures.msg" "msg/NbvTrajectory.msg"
+  DEPENDENCIES std_msgs geometry_msgs sensor_msgs)
+ament_export_dependencies(rosidl_default_runtime)
+ament_package()

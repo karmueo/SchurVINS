@@ -1,5 +1,5 @@
 <?xml version="1.0"?>
-<package format="2">
+<package format="3">
   <name>svo</name>
   <version>0.1.0</version>
   <description>
@@ -8,31 +8,31 @@
   <author>Christian Forster</author>
   <maintainer email="forster@ifi.uzh.ch">Christian Forster</maintainer>
   <license>GPLv3</license>
-
-  <buildtool_depend>catkin</buildtool_depend>
-
-  <depend>cmake_modules</depend> <!-- for FindEigen.cmake -->
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <depend>ament_index_cpp</depend>
+  <depend>cv_bridge</depend>
+  <depend>eigen</depend>
+  <depend>fast_neon_vendor</depend>
+  <depend>libgoogle-glog-dev</depend>
+  <depend>minkindr_vendor</depend>
+  <depend>opengv</depend>
+  <depend>rclcpp</depend>
+  <depend>rpg_common</depend>
   <depend>svo_cmake</depend>
   <depend>svo_common</depend>
   <depend>svo_direct</depend>
-  <depend>svo_tracker</depend>
-  <depend>svo_test_utils</depend>
+  <depend>svo_global_map</depend>
   <depend>svo_img_align</depend>
   <depend>svo_online_loopclosing</depend>
-  <depend>svo_global_map</depend>
+  <depend>svo_test_utils</depend>
+  <depend>svo_tracker</depend>
   <depend>svo_vio_common</depend>
-  <depend>roscpp</depend>
-  <depend>roslib</depend>
-  <depend>rpg_common</depend>
-  <depend>vikit_common</depend>
   <depend>vikit_cameras</depend>
-  <depend>vikit_solver</depend>
+  <depend>vikit_common</depend>
   <depend>vikit_ros</depend>
-  <depend>eigen_catkin</depend>
-  <depend>minkindr</depend>
-  <depend>fast</depend>
-  <depend>opengv</depend>
-  <depend>cv_bridge</depend>
-  <depend>glog_catkin</depend>
-  
+  <depend>vikit_solver</depend>
+  <test_depend>ament_cmake_gtest</test_depend>
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
 </package>

@@ -1,25 +1,18 @@
+cmake_minimum_required(VERSION 3.22)
 project(rpg_common)
-cmake_minimum_required(VERSION 2.8.3)
+find_package(ament_cmake REQUIRED)
+find_package(cv_bridge REQUIRED)
+find_package(minkindr_vendor REQUIRED)
+find_package(svo_cmake REQUIRED)
+include(SvoSetup)
 
-find_package(catkin_simple REQUIRED)
-catkin_simple(ALL_DEPS_REQUIRED)
-set(OpenCV_DIR /usr/share/OpenCV)
-find_package(OpenCV REQUIRED)
-
-if(${OpenCV_VERSION} STREQUAL "3.2.0")
-  message(STATUS "OpenCV version ${OpenCV_VERSION}")
-else()
-  message(WARNING "OpenCV version ${OpenCV_VERSION}, OpenCV version must be 3.2.0")
-endif()
-
-add_definitions(-std=c++11)
-
-FILE(GLOB_RECURSE HEADERS "include/*")
-
-list(APPEND SOURCES src/fs.cpp)
-
-cs_add_library(${PROJECT_NAME} ${HEADERS} ${SOURCES})
-target_link_libraries(${PROJECT_NAME} ${OpenCV_LIBRARIES})
-
-cs_install()
-cs_export()
+add_library(${PROJECT_NAME} SHARED
+  src/fs.cpp
+)
+svo_target(${PROJECT_NAME})
+ament_target_dependencies(${PROJECT_NAME} PUBLIC cv_bridge minkindr_vendor svo_cmake)
+install(TARGETS ${PROJECT_NAME} EXPORT export_${PROJECT_NAME} ARCHIVE DESTINATION lib LIBRARY DESTINATION lib RUNTIME DESTINATION bin)
+install(DIRECTORY include/ DESTINATION include)
+ament_export_targets(export_${PROJECT_NAME} HAS_LIBRARY_TARGET)
+ament_export_dependencies(cv_bridge minkindr_vendor svo_cmake Eigen3 glog gflags yaml-cpp OpenCV Threads)
+ament_package()

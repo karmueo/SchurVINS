@@ -1,13 +1,29 @@
+cmake_minimum_required(VERSION 3.22)
 project(svo)
-cmake_minimum_required(VERSION 2.8.3)
-
-find_package(yaml-cpp)
-find_package(catkin_simple)
-catkin_simple()
-
+find_package(ament_cmake REQUIRED)
+find_package(ament_index_cpp REQUIRED)
+find_package(cv_bridge REQUIRED)
+find_package(fast_neon_vendor REQUIRED)
+find_package(minkindr_vendor REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(rpg_common REQUIRED)
+find_package(svo_cmake REQUIRED)
+find_package(svo_common REQUIRED)
+find_package(svo_direct REQUIRED)
+find_package(svo_global_map REQUIRED)
+find_package(svo_img_align REQUIRED)
+find_package(svo_online_loopclosing REQUIRED)
+find_package(svo_test_utils REQUIRED)
+find_package(svo_tracker REQUIRED)
+find_package(svo_vio_common REQUIRED)
+find_package(vikit_cameras REQUIRED)
+find_package(vikit_common REQUIRED)
+find_package(vikit_ros REQUIRED)
+find_package(vikit_solver REQUIRED)
 include(SvoSetup)
+find_package(opengv REQUIRED)
 
-list(APPEND SVO_SOURCEFILES
+add_library(${PROJECT_NAME} SHARED
   src/frame_handler_mono.cpp
   src/frame_handler_stereo.cpp
   src/frame_handler_array.cpp
@@ -21,39 +37,16 @@ list(APPEND SVO_SOURCEFILES
   src/stereo_triangulation.cpp
   src/io.cpp
 )
-
-list(APPEND SVO_HEADERFILES
-  include/svo/abstract_bundle_adjustment.h
-  include/svo/frame_handler_base.h
-  include/svo/frame_handler_mono.h
-  include/svo/frame_handler_stereo.h
-  include/svo/frame_handler_array.h
-  include/svo/global.h
-  include/svo/imu_handler.h
-  include/svo/initialization.h
-  include/svo/map.h
-  include/svo/pose_optimizer.h
-  include/svo/schur_vins.h
-  include/svo/reprojector.h
-  include/svo/stereo_triangulation.h
-  include/svo/io.h
-  include/svo/svo.h
-  )
-
-################################################################################
-# Create svo library
-include_directories(include ${INCLUDE_DIRS})
-cs_add_library(svo SHARED ${SVO_SOURCEFILES} ${SVO_HEADERFILES})
-target_link_libraries(svo ${LINK_LIBS} yaml-cpp)
-
-################################################################################
-###
-### GTEST
-###
-
-catkin_add_gtest(${PROJECT_NAME}-test-frame test/test_frame.cpp)
-target_link_libraries(${PROJECT_NAME}-test-frame ${PROJECT_NAME})
-
-################################################################################
-cs_install()
-cs_export()
+svo_target(${PROJECT_NAME})
+ament_target_dependencies(${PROJECT_NAME} PUBLIC ament_index_cpp cv_bridge fast_neon_vendor minkindr_vendor rclcpp rpg_common svo_cmake svo_common svo_direct svo_global_map svo_img_align svo_online_loopclosing svo_test_utils svo_tracker svo_vio_common vikit_cameras vikit_common vikit_ros vikit_solver)
+target_link_libraries(${PROJECT_NAME} PUBLIC opengv)
+if(BUILD_TESTING)
+  find_package(ament_cmake_gtest REQUIRED)
+  ament_add_gtest(${PROJECT_NAME}-test-frame test/test_frame.cpp)
+  target_link_libraries(${PROJECT_NAME}-test-frame ${PROJECT_NAME})
+endif()
+install(TARGETS ${PROJECT_NAME} EXPORT export_${PROJECT_NAME} ARCHIVE DESTINATION lib LIBRARY DESTINATION lib RUNTIME DESTINATION bin)
+install(DIRECTORY include/ DESTINATION include)
+ament_export_targets(export_${PROJECT_NAME} HAS_LIBRARY_TARGET)
+ament_export_dependencies(ament_index_cpp cv_bridge fast_neon_vendor minkindr_vendor rclcpp rpg_common svo_cmake svo_common svo_direct svo_global_map svo_img_align svo_online_loopclosing svo_test_utils svo_tracker svo_vio_common vikit_cameras vikit_common vikit_ros vikit_solver Eigen3 glog gflags yaml-cpp OpenCV Threads opengv)
+ament_package()
