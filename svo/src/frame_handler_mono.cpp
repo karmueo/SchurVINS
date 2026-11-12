@@ -275,6 +275,7 @@ UpdateResult FrameHandlerMono::relocalizeFrame(
 
 void FrameHandlerMono::resetAll()
 {
+  std::lock_guard<std::recursive_mutex> frame_lock(depth_filter_->frame_state_mutex_);
   if(bundle_adjustment_type_==BundleAdjustmentType::kCeres)
   {
     // with the ceres backend we have to make sure to initialize the scale

@@ -38,6 +38,8 @@ target_link_libraries(svo_test_feature_alignment PRIVATE ${PROJECT_NAME})
 install(TARGETS svo_test_feature_alignment DESTINATION lib/${PROJECT_NAME})
 if(BUILD_TESTING)
   find_package(ament_cmake_gtest REQUIRED)
+  ament_add_gtest(test_depth_filter_concurrency test/test_depth_filter_concurrency.cpp TIMEOUT 30)
+  target_link_libraries(test_depth_filter_concurrency ${PROJECT_NAME})
   ament_add_gtest(${PROJECT_NAME}-test-depth-estimation
   test/test_depth_estimation.cpp
   test/test_utils.h

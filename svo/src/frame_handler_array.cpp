@@ -193,6 +193,7 @@ UpdateResult FrameHandlerArray::makeKeyframe(const size_t camera_id)
 
 void FrameHandlerArray::resetAll()
 {
+  std::lock_guard<std::recursive_mutex> frame_lock(depth_filter_->frame_state_mutex_);
   backend_scale_initialized_ = true;
   resetVisionFrontendCommon();
   depth_filter_->reset();

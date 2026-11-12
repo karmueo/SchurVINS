@@ -184,6 +184,8 @@ FrameHandlerBase::FrameHandlerBase(const BaseOptions& base_options, const Reproj
 
 FrameHandlerBase::~FrameHandlerBase()
 {
+  // Join before other frontend members release shared frames and landmarks.
+  depth_filter_->stopThread();
   VLOG(1) << "SVO destructor invoked";
 }
 
@@ -232,6 +234,7 @@ bool FrameHandlerBase::addImageBundle(const std::vector<cv::Mat>& imgs, const ui
 //------------------------------------------------------------------------------
 bool FrameHandlerBase::addFrameBundle(const FrameBundlePtr& frame_bundle)
 {
+  std::lock_guard<std::recursive_mutex> frame_lock(depth_filter_->frame_state_mutex_);
   VLOG(40) << "New Frame Bundle received: " << frame_bundle->getBundleId();  
   CHECK_EQ(frame_bundle->size(), cams_->numCameras());
 
@@ -1331,6 +1334,7 @@ void FrameHandlerBase::setDetectorOccupiedCells(
 
 void FrameHandlerBase::setFirstFrames(const std::vector<FramePtr>& first_frames)
 {
+  std::lock_guard<std::recursive_mutex> frame_lock(depth_filter_->frame_state_mutex_);
   resetAll();
   last_frames_.reset(new FrameBundle(first_frames));
   for (auto f : last_frames_->frames_)
@@ -1368,6 +1372,7 @@ std::vector<FramePtr> FrameHandlerBase::closeKeyframes() const
 
 void FrameHandlerBase::setCompensation(const bool do_compensation)
 {
+  std::lock_guard<std::recursive_mutex> frame_lock(depth_filter_->frame_state_mutex_);
   sparse_img_align_->setCompensation(do_compensation);
   for (const ReprojectorPtr& rep : reprojectors_)
   {

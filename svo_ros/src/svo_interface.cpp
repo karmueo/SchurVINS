@@ -154,6 +154,7 @@ void SvoInterface::publishResults(
   CHECK_NOTNULL(svo_.get());
   CHECK_NOTNULL(visualizer_.get());
 
+  std::lock_guard<std::recursive_mutex> frame_lock(svo_->depth_filter_->frame_state_mutex_);
   visualizer_->img_caption_.clear();
   if (svo_->isBackendValid())
   {

@@ -158,6 +158,12 @@ public:
       const std::vector<FramePtr>& frames_with_seeds,
       const FramePtr& new_frame);
 
+  // Frame poses and feature storage are shared with the frontend. The caller
+  // holds this lock for a complete frontend update or visualization snapshot;
+  // the depth worker holds it for each seed job. Recursive for reset inside a
+  // frontend update. Always acquire before feature_detector_mut_ / jobs_mut_.
+  std::recursive_mutex frame_state_mutex_;
+
   // need public access to set grid occupancy
   mutex_t feature_detector_mut_;
   DetectorPtr feature_detector_;
@@ -169,6 +175,7 @@ protected:
   std::condition_variable jobs_condvar_;
   std::unique_ptr<std::thread> thread_;
   bool quit_thread_ = false;
+  uint64_t jobs_generation_ = 0;
   Matcher::Ptr matcher_;
 
   /// A thread that is continuously updating the seeds.

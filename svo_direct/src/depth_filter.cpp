@@ -69,6 +69,7 @@ void DepthFilter::startThread()
     SVO_ERROR_STREAM("DepthFilter: Thread already started!");
     return;
   }
+  { ulock_t lock(jobs_mut_); quit_thread_ = false; }
   SVO_INFO_STREAM("DepthFilter: Start thread.");
   thread_.reset(new std::thread(&DepthFilter::updateSeedsLoop, this));
 }
@@ -79,7 +80,7 @@ void DepthFilter::stopThread()
   if(thread_ != nullptr)
   {
     SVO_DEBUG_STREAM("DepthFilter: interrupt and join thread... ");
-    quit_thread_ = true;
+    { ulock_t lock(jobs_mut_); quit_thread_ = true; }
     jobs_condvar_.notify_all();
     thread_->join();
     thread_.reset();
@@ -92,6 +93,7 @@ void DepthFilter::addKeyframe(
     const double depth_min,
     const double depth_max)
 {
+  std::lock_guard<std::recursive_mutex> frame_lock(frame_state_mutex_);
   // allocate memory for new features.
   frame->resizeFeatureStorage(
       frame->num_features_ + feature_detector_->grid_.size() +
@@ -136,9 +138,11 @@ void DepthFilter::addKeyframe(
 
 void DepthFilter::reset()
 {
+  std::lock_guard<std::recursive_mutex> frame_lock(frame_state_mutex_);
   ulock_t lock(jobs_mut_);
   while(!jobs_.empty())
     jobs_.pop();
+  ++jobs_generation_;
   SVO_INFO_STREAM("DepthFilter: RESET.");
 }
 
@@ -148,6 +152,7 @@ void DepthFilter::updateSeedsLoop()
   {
     // wait for new jobs
     Job job;
+    uint64_t generation = 0;
     {
       ulock_t lock(jobs_mut_);
       while(jobs_.empty() && !quit_thread_)
@@ -156,10 +161,19 @@ void DepthFilter::updateSeedsLoop()
       if(quit_thread_)
         return;
 
+      generation = jobs_generation_;
       job = jobs_.front();
       jobs_.pop();
     } // release lock
 
+    // Do not hold jobs_mut_ while acquiring this lock: the frontend enqueues
+    // jobs while it owns frame_state_mutex_.
+    std::lock_guard<std::recursive_mutex> frame_lock(frame_state_mutex_);
+    {
+      ulock_t lock(jobs_mut_);
+      if (quit_thread_) return;
+      if (generation != jobs_generation_) continue;
+    }
     // process jobs
     if(job.type == Job::SEED_INIT)
     {
@@ -201,6 +215,7 @@ size_t DepthFilter::updateSeeds(
     const std::vector<FramePtr>& ref_frames_with_seeds,
     const FramePtr& cur_frame)
 {
+  std::lock_guard<std::recursive_mutex> frame_lock(frame_state_mutex_);
   size_t n_success = 0;
   if(thread_ == nullptr)
   {
