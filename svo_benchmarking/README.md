@@ -1,126 +1,52 @@
-This document describes the benchmark tools and detailed instructions to use it.
+# Offline experiments and evaluation on ROS2 Jazzy
 
-1. [Overview](#overview)
-2. [Dataset generation](#dataset-generation)
-3. [Run a configuration on multiple datasets](#run-a-configuration-on-multiple-datasets)
-4. [Analyze the Results](#analyze-the-results)
+All tools use Python 3.12 and installed ament packages. Keep datasets, calibration and outputs in external writable directories. Read [dataset preparation](dataset_tools/README.md) for native ROS2 MCAP/SQLite3 exports; no ROS1 bag reader is provided.
 
+## Batch offline experiments
 
-## Overview
-The benchmark tool is designed to evaluate and compare the performance of different configurations on multiple datasets. Each configuration can be different parameters, sensor combination (stereo/mono), etc.
+Source the selected workspace profile. Mono, visual-only and array require `USE_SCHUR_VINS=OFF`. A dataset contains `calib.yaml`, `data/images.txt` and optional `data/imu.txt`, reference and timestamp matches. Stereo image rows have two image paths; array rows have four. Paths are relative to `data/` unless absolute.
 
-To use it, one needs to do the following
-
-* Dataset generation
-* Running one configuration / multiple configurations
-* Analyze the results
-
-## Dataset generation
-Each dataset is organized in a self-contained folder.
-We provide tools to generate the desired folder from a ROS bag file.
-See detailed instructions in `dataset_tools/README.md`.
-
-## Run a configuration on multiple datasets
-To run a configuration on multiple datasets, one first needs to specify a configuration file and put all the datasets in the correct folder.
-
-### Prepare a configuration file and datasets
-Each configuration is described in a `yaml` file under `experiments` folder.
-The structure of a configuration file is:
-```
-# meta information
-experiment_label: 'svoceresstereo'
-ros_node: svo_ros
-ros_node_name: svo_benchmark_with_ceres
-flags:
-  v: 0
-  logtostderr: 1
-
-# parameters for the pipeline
-settings:
-......
-
-# list of datasets to run with the settings above
-# the name is the folder contains the dataset in the data folder
-datasets:
-  - name: euroc/stereo/MH_01
-    settings:
-      dataset_first_frame: 0
-  - name: euroc/stereo/MH_04
-    settings:
-      dataset_first_frame: 0
-......
-```
-You can find multiple examples under `experiments` folder already.
-
-All the datasets are put in the `data` folder (you can put a soft link to your actual data folder). The `name` field of each dataset in the configuration file is the path to the dataset folder. For example, for the above configuration, the folder structure inside `data` will look like:
-```
-data
-├── euroc
-│   └── stereo
-│       ├── MH_01
-│       └── MH_04
-
-```
-Each dataset folder is what we get from using `dataset_tools` in the previous step. Monocular setup can also be run on a stereo dataset, and only the first camera will be used in that case.
-
-### Run a configuration
-After the preparation is done, you can run one configuration via
-```
-rosrun svo_benchmarking benchmark.py <config_name>.yaml
-```
-The results are written to `results/<time>_<config_name>`,
-and the results for each dataset are put into a corresponding sub-folder.
-For example, running the above configuration will generate a folder structure like:
-```
-results
-├── 20180425_153857_euroc_stereo
-│   ├── MH_01
-│   └── MH_04
-```
-Note:
-* There are also some configurations that allow to run each time several time (`--n_trials`), customize the evaluation configuraiton (`--align_type` and `--n_aligned`). Note that the default setting is to use `posyaw` for alignment, which may give lower accuracy then `se3` or `sim3`.
-* There will be different estimate files in the folder, depending on the pipeline you executed. For example, if you execute the global map experiment, you will see the following output
-
-  * `stamped_traj_estimate.txt`: real-time estimate after processing each frame
-
-  * `stamped_ba_estimate.txt`: bundle adjusted poses from iSAM2 after everything is done
-    Please take care to compare the same type of estimate using the same analysis configuration in your accuracy evaluation. You can use the script in `rpg_trajectory_evaluation` to change the evaluation configuration files easily
-
-    ```sh
-    rosrun rpg_trajectory_evaluation change_eval_cfg_recursive.py <folder> <align_type> <align_frame>
-    ```
-
-    
-
-## Analyze the Results
-### Trajectory accuracy
-We recommend to use the [evaluation toolbox](https://github.com/uzh-rpg/rpg_trajectory_evaluation) to analyze the trajectory accuracy. We have already written a `eval_cfg.yaml` to the result folder, which will be used by the toolbox to determine the alignment parameters for evaluation (default: `posyaw` and all frames). 
-#### Single trajectory accuracy
-Basically, you can put the toolbox in your workspace and run (after compiling and sourcing)
-```sh
-rosrun rpg_trajectory_evaluation analyze_trajectory_single.py <result_folder>
+```bash
+ros2 run svo_benchmarking benchmark.py /absolute/path/experiment.yaml \
+  --dataset-root /absolute/datasets --output-dir /absolute/experiments --n_trials 3
 ```
 
-#### Batch evaluation
-We provide a script `scripts/organize_results_mul.py` to organize the results of mutiple estimation types, multiple trials into the folder structure that can be processed by `rpg_trajectory_evaluation` toolbox. For example
-```sh
-# in results folder
-rosrun svo_ceres_benchmarking organize_results_mul.py ./<results> --est_types traj_est ba_estimate
-```
-will generates a folder structure like
-```
-└── laptop
-    ├── svo_ceres_ba
-    │   ├── laptop_svo_ceres_ba_MH_01
-    │   ├── laptop_svo_ceres_ba_MH_02
- ....
-    └── svo_ceres_rp
-        ├── laptop_svo_ceres_rp_MH_01
-        ├── laptop_svo_ceres_rp_MH_02
-....
-```
-Then you can use the example analysis configration `analyze_traj_cfg/exp_gm_euroc_all.yaml` with `rpg_trajectory_evaluation` to analyze the accuracy of both bundle adjusted pose and real-time poses conveniently. Please see the documentation in [rpg_trajectory_evaluation](https://github.com/uzh-rpg/rpg_trajectory_evaluation/tree/dev) for details. There are also some other configurations that work for different experiment types (e.g., VIO only, pose graph).
+An experiment name without a path is read from the installed `share/svo_benchmarking/experiments`. Existing example YAML settings remain available. `datasets[].name` resolves under `--dataset-root`; `datasets[].directory` can override it with a relative or absolute directory. `SVO_DATASET_DIR` or top-level `dataset_root` in the experiment YAML is an alternative. Calibration defaults to each dataset's `calib.yaml` and may be changed with `calib_name`.
 
-### Other evaluation
+Each trial gets its own directory, parameter YAML, CPU/memory samples and the runtime's unique `benchmark_*` subdirectory. The actual trace directory receives effective parameters and available reference files. No output is written to installed package share. Command failures stop the batch instead of being counted as successful runs. `--n_aligned` and `--align_type` preserve legacy configuration metadata; the reference report below always uses no-scale SE(3).
 
-Different evaluations can be done using the result using the script under `scripts`. See `evaluation_tools.md` for details.
+An individual offline run can also invoke the installed `svo_benchmark` executable with a ROS2 parameter file selecting `dataset_directory`, `dataset_is_stereo`/`dataset_is_array`, calibration, estimator settings and `output_dir`. Use the traditional build for mono/array. Four-camera image indexes must have `id timestamp image0 image1 image2 image3` on each row.
+
+## Reference metrics
+
+Inputs are finite TUM rows `timestamp tx ty tz qx qy qz qw`, strictly increasing in time. The tool fits SE(3), never scale, and reports position ATE RMSE and one-second translation/rotation RPE. Default timestamp tolerance is 10 ms. Missing one-second pairs are reported as zero pairs/null metrics rather than fabricated values.
+
+```bash
+ros2 run svo_benchmarking reference_report.py /absolute/imu_traj.txt \
+  /absolute/reference_tum.txt /absolute/report --tolerance 0.01
+ros2 run svo_benchmarking reference_report.py /absolute/results /absolute/batch-reports --batch
+ros2 run svo_benchmarking analyze_all_euroc.sh /absolute/results /absolute/batch-reports
+```
+
+Batch mode recursively finds `stamped_groundtruth.txt` and each available stamped estimate variant/trial (or `imu_traj.txt`) in the same folder. It writes individual JSON/plots plus `batch_summary.json`. Explicit per-run commands remain appropriate when reference and estimate live in different folders. The EGO reference contains other VIO priors and is not independent ground truth; accuracy claims must preserve that qualification.
+
+Legacy id-keyed results can be converted locally:
+
+```bash
+ros2 run svo_benchmarking convert_old_fmt.py /absolute/legacy-results
+```
+
+The converter uses `groundtruth_matches.txt` and `groundtruth.txt` for an `id xyz xyzw` estimate, or strips the id from `id timestamp xyz xyzw`; outputs are `stamped_groundtruth.txt` and `stamped_traj_estimate0.txt`. It does not depend on a repository-external trajectory evaluator.
+
+`organize_results.py` accepts an explicit source path and `--output-dir`; `organize_results_mul.py` accepts `--save_dir`. `evaluate.py`/`evaluate_all.py` execute the explicitly configured ROS2 evaluation commands with checked exit status. Plot utilities work without a system LaTeX installation.
+
+## Regression fixtures
+
+The owning ament package registers Python fixtures for native MCAP/SQLite3 reader/writer, typed exports, no-scale trajectory metrics and GUI lifecycle. In a sourced install, individual fixtures can be run directly from the source checkout:
+
+```bash
+python3 -m unittest discover -s /absolute/SchurVINS/svo_benchmarking/test -v
+QT_QPA_PLATFORM=offscreen python3 -m unittest discover -s /absolute/SchurVINS/rqt_svo/test -v
+```
+
+These are execution instructions, not recorded passing results. Native storage tests require both rosbag2 storage plugins, cv_bridge, sensor/geometry/nav messages and system NumPy. Metric fixtures require SciPy/Matplotlib; GUI fixtures need python_qt_binding and an offscreen/display backend. Record datasets and feature fixtures separately from compilation results.

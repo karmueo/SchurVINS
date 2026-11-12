@@ -12,21 +12,19 @@ Note that the global map function is only tested with monocular configuration an
 
 
 
-## Examples on EuRoC
+## ROS2 Jazzy operation
 
-Source the workspace first:
-```sh
-source ~/svo_ws/devel/setup.bash
+The global map remains disabled by default. Build `USE_GLOBAL_MAP=ON`; the existing monocular example additionally requires `USE_SCHUR_VINS=OFF` in its own build/install profile. The full profile also compiles the GTSAM interfaces for integration checks. In a sourced matching install:
+
+```bash
+ros2 launch svo_ros euroc_global_map_mono.launch.py \
+  output_dir:="$HOME/schurvins-results/global-map" \
+  vocabulary_dir:="$HOME/.cache/schurvins/resources/vocabularies"
+ros2 bag play /absolute/ros2_euroc --clock --rate 0.25
 ```
-Executing
-```
-roslaunch svo_ros euroc_global_map_mono.launch
-rosbag play MH_03_medium.bag -s 15
-```
-You should see some visualization as below:
+
+Use verified official vocabulary resources and native ROS2 bags. Report real-data initialization, loop corrections, global-map updates, trajectory metrics and runtime independently; compilation alone does not establish functional acceptance. The following historical visualization explains landmarks managed by iSAM2 and fixed-anchor reprojections, without claiming Jazzy validation.
 
 ![](./images/mh03_gm.gif)
 
-The green points are the landmarks that are observed by the frames that are currently in the sliding window optimization, which is indicated by the trailing lines. The blue points are the landmarks that are optimized and managed by iSAM2. As mentioned above, once the green points go out of the sliding window, they are taken over by iSAM2. You can observe the points optimized by iSAM2 are slightly more accurate.
-
-Once the camera moves back to the region that is already mapped, the pipeline tries to match features against the blue points, which are indicated by the golden lines. The successfully matched blue points are treated as **fixed anchors** in the sliding window optimization, which anchors the sliding window to the consistent global map managed by iSAM2. The green rectangle surround the image indicates that there are enough fixed landmarks observed in the current sliding window, and we can drop the fixation at the first frame that is usually done in sliding window optimization.
+See [ROS2_JAZZY.md](ROS2_JAZZY.md) for isolated profiles, parameter migration and complete playback requirements.

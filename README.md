@@ -16,48 +16,69 @@ The SchurVINS is developed on SVO2.0(**[rpg_svo_pro_open](https://github.com/uzh
 **Related Publication:**  
 Yunfei Fan, Tianyu Zhao, Guidong Wang. SchurVINS: Schur Complement-Based Lightweight Visual Inertial Navigation System. (Accepted by CVPR 2024).**[PDF](https://arxiv.org/pdf/2312.01616.pdf)**.  
 
-## 2. Prerequisites
-We have tested the codebase in **Ubuntu 18.04**.  
-The following dependencies are needed:
+## 2. ROS2 Jazzy setup
 
-### System dep.
-```
-# For Ubuntu 18.04 + Melodic
-sudo apt-get install python-catkin-tools python-vcstool
-sudo apt-get install libglew-dev libopencv-dev libyaml-cpp-dev 
-```
+The migration targets **Ubuntu 24.04, ROS2 Jazzy, C++17 and Python 3.12** with system Eigen 3.4, OpenCV 4.6, Ceres 2.2, yaml-cpp 0.8, GTSAM 4.2 and OpenGV. Use the [Jazzy installation and operating guide](doc/ROS2_JAZZY.md) for dependency installation, fixed vendor revisions, three isolated build profiles and troubleshooting. Validation status must be taken from the generated acceptance reports; the commands below are not a claim that every feature has passed validation.
 
+After installing Jazzy and the dependencies documented in that guide:
 
-### Ceres dep.
-
-```
-sudo apt-get install libblas-dev liblapack-dev libsuitesparse-dev
-```
-
-## 3. Build
-
-Clone and build the repository:
-```
-cd ~/catkin_ws/src
+```bash
+source /opt/ros/jazzy/setup.bash
+mkdir -p ~/schurvins_ws/src
+cd ~/schurvins_ws/src
 git clone https://github.com/bytedance/SchurVINS.git
-source ~/catkin_ws/devel/setup.bash
-mkdir -p ~/catkin_ws/src/SchurVINS/results
-mkdir -p ~/catkin_ws/src/SchurVINS/logs
-vcs-import < ./SchurVINS/dependencies.yaml
-touch minkindr/minkindr_python/CATKIN_IGNORE
-catkin build
+export SCHURVINS_DEPENDENCY_DIR="$HOME/.cache/schurvins/dependencies"
+python3 SchurVINS/scripts/prepare_dependencies.py "$SCHURVINS_DEPENDENCY_DIR"
+python3 SchurVINS/scripts/prepare_resources.py "$HOME/.cache/schurvins/resources"
+cd ~/schurvins_ws
+colcon --log-base log-default build --base-paths src/SchurVINS \
+  --build-base build-default --install-base install-default \
+  --cmake-args -DCMAKE_BUILD_TYPE=Release -DPython3_EXECUTABLE=/usr/bin/python3 \
+  -DOpenCV_DIR=/usr/lib/x86_64-linux-gnu/cmake/opencv4 \
+  -DUSE_SCHUR_VINS=ON -DUSE_LOOP_CLOSING=ON -DUSE_GLOBAL_MAP=OFF
+source install-default/setup.bash
 ```
 
-## 4. Run
-We provide examples to run SchurVINS with [EuRoC dataset](https://projects.asl.ethz.ch/datasets/doku.php?id=kmavvisualinertialdatasets#downloads). 
+The default estimator is stereo SchurVINS with IMU. Build the separate traditional profile for monocular, visual-only and four-camera offline processing. Global mapping uses the full profile; it remains disabled by default. See [contributing](CONTRIBUTING.md) for the package layout and checks.
 
-Open three terminals, launch the schur_vins , rviz and play the bag file respectively. Take MH_01 for example 
+## 3. EGO stereo + IMU
 
+The automated acceptance entry waits for DDS subscriptions, runs playback, checks complete counts, sends `q` after image processing drains, and evaluates the resulting reference trajectory. Use a **new** output path for each run:
+
+```bash
+python3 ~/schurvins_ws/src/SchurVINS/scripts/accept_ego.py \
+  --bag /data/scl_data/slam/stereo_live_bags/EGO/800hz/job_002.mcap \
+  --calibration /data/scl_data/slam/stereo_live_bags/EGO/800hz/calib.yaml \
+  --output "$HOME/schurvins-results/ego-acceptance-quarter-speed" --rate 0.25 \
+  --reference /data/scl_data/slam/stereo_live_bags/EGO/800hz/output/GT/trajectory_gt_imu.txt
 ```
-roslaunch svo_ros euroc_vio_stereo.launch
-rviz -d svo_ros/rviz_config.rviz
-rosbag play YOUR_PATH_TO_DATASET/MH_01_easy.bag 
+
+Inspect `acceptance.json`, the unique run's `summary.json`, `frames.csv`, `imu_traj.txt`, and the `reference/` report. Repeat with another new output directory and `--rate 1` for the performance run. These outputs determine the acceptance result; the existence of this command does not imply a passing run.
+
+For manual inspection, run the adapter and estimator using the source calibration, then play only the two source topics in another sourced terminal:
+
+```bash
+ros2 launch svo_ros ego.launch.py \
+  source_calibration:=/data/scl_data/slam/stereo_live_bags/EGO/800hz/calib.yaml \
+  output_dir:="$HOME/schurvins-results/ego-quarter-speed" rviz:=true
 ```
+
+For manual replay, use the reliable QoS override and readiness/drain procedure in the [Jazzy guide](doc/ROS2_JAZZY.md).
+
+The adapter splits each 3840×1080 JPEG into two 1920×1080 grayscale images, applies the documented IMU timestamp and fixed-bias correction once, and preserves the source files. The launch generates an external calibration with pinhole + equidistant distortion and correct inverse camera/IMU extrinsics. Output goes into a unique run directory under `output_dir`.
+
+Wait for subscriptions before replay and for image processing to drain after replay. The complete procedure, expected counts, JSON status topics and reference evaluation are in the [Jazzy guide](doc/ROS2_JAZZY.md). Repeat at `--rate 1.0` for the separate performance run. A successful process exit alone is insufficient for acceptance.
+
+## 4. Other inputs and tools
+
+```bash
+ros2 launch svo_ros euroc_vio_stereo.launch.py output_dir:="$HOME/schurvins-results/euroc"
+ros2 bag play /absolute/path/to/ros2_euroc --clock --rate 0.25
+ros2 run rqt_svo rqt_svo
+```
+
+Input bags must be native ROS2 MCAP or SQLite3. Dataset export and batch offline experiments are documented in [svo_benchmarking](svo_benchmarking/README.md); trajectory comparison reports no-scale SE(3) ATE and one-second translation/rotation RPE. The source EGO reference contains other VIO priors and is not independent ground truth.
+
 # 5. Reproducibility
 There might be minor differences between the released version and the results in the paper. Please note that multi-thread performance has some randomness due to CPU utilization.
 On EuRoC datasets, please note to skip the first few seconds of datasets with the following configurations for reproducibility.

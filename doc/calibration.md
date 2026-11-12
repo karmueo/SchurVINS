@@ -5,8 +5,8 @@ Here we introduce how to calibrate cameras using several commonly used models an
 ## Pinhole projection + Radial-tangential
 This is the distortion model used in opencv and ROS, also known as `plumb_bob`. We can calibrate it using the tool provided by ROS:
 ```sh
-sudo apt-get install ros-melodic-camera-calibration
-rosrun camera_calibration cameracalibrator.py <specify topics/calibration target>
+sudo apt install ros-jazzy-camera-calibration
+ros2 run camera_calibration cameracalibrator --size 8x6 --square 0.025 --ros-args -r image:=/camera/image_raw -r camera:=/camera
 ```
 Make sure to adapt size for the checkerboard actually used. What you get is in the format:
 ```
@@ -62,7 +62,7 @@ This is a generic distortion model that can model very different field of views 
 Afterwards, you can use the script `kalibr_to_svo.py` under `svo_ros/scripts` to convert the output to svo format:
 
 ```sh
-./kalibr_to_svo --kalibr <output_of_kalibr>
+python3 "$(ros2 pkg prefix --share svo_ros)/scripts/kalibr_to_svo.py" --kalibr /absolute/camchain.yaml --imu /absolute/imu.yaml
 ```
 
 
@@ -73,3 +73,7 @@ Afterwards, you can use the script `omni_matlab_to_rpg.py` under `svo_ros/script
 
 # Visual-inertial calibration
 We recommend to use [Kalibr](https://github.com/ethz-asl/kalibr) for calibrating visual-inertial sensors. Please see [this document](./frontend/frontend_fla.md) for the format of the calibration file for stereo and stereo + IMU configurations.
+
+## EGO source calibration
+
+The EGO adapter uses pinhole + equidistant, not the single-parameter model called `fisheye` in this repository. Source `T_cam_imu` is inverted to `T_B_C` after converting millimetres to metres. Fixed bias/time correction is applied once by the adapter, with zero initial internal bias and `delay_imu_cam=0`. Use the dedicated converter and launch documented in [ROS2_JAZZY.md](ROS2_JAZZY.md); source calibration remains read-only.

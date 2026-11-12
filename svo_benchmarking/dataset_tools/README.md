@@ -1,91 +1,69 @@
-# Prepare dataset for benchmarking
+# Prepare offline datasets
 
-In this document, we describe how to convert ROS bags/EuRoC datasets to the format that will be used by the benchmarking tool.
+The installed tools read native ROS2 MCAP/SQLite3 files or bag directories. All paths are caller-selected; datasets do not belong in installed package share. Source Jazzy and the chosen SchurVINS install before running from any directory.
 
-1. [Dataset Format](#dataset-format)
-2. [Instructions](#instructions)
-3. [Diverse Scripts](#diverse-scripts)
-
-## Dataset Format
-Each dataset, including the images, IMU measurements and groundtruth will be organized in a folder, for example:
-
-```
-<dataset_name>
-├── calib.yaml --> calibration file
-├── data
-│   ├── groundtruth_matches.txt
-│   ├── groundtruth.txt
-│   ├── stamped_groundtruth.txt
-│   ├── images.txt
-│   ├── img --> folder containing actual images
-│   └── imu.txt
-└── dataset.yaml --> optional: can be used to specify dataset-specific parameters
-
+```text
+dataset/
+  calib.yaml
+  dataset.yaml                 # optional dataset parameters
+  data/
+    images.txt                 # id timestamp image0 [image1 ...]
+    img/                       # grayscale PNGs
+    imu.txt                    # id timestamp wx wy wz ax ay az
+    groundtruth.txt            # id timestamp xyz qx qy qz qw
+    stamped_groundtruth.txt    # timestamp xyz qx qy qz qw
+    groundtruth_matches.txt    # image_id reference_id
 ```
 
-The dataset essentially lives in the `data` folder, and the files are of the following formats
+Timestamps are seconds; gyroscope units are rad/s and acceleration m/s². Images paths are relative to `data/`. Export does not apply EGO bias/time/extrinsic correction; use the EGO adapter/calibration workflow for that source, exactly once.
 
-* `groundtruth.txt`: `id time_sec px py pz qx qy qz qw`
-* (optional) `stamped_groundtruth.txt`: `time_sec px py pz qx qy qz qw`
-* `images.txt`: specifying the image files, with respect to the `data` folder
-    * monocular: `id time_sec image`
-    * stereo: `id time_sec image_0 image_1`
-* `imu.txt`: `id time_sec wx wy wz ax ay az`
-* `groundtruth_matches.txt`: `id_img id_gt`
-
-The `id` field is simply an increasing integer. The file `groundtruth_matches.txt` is useful to identify the groundtruth corresponding to a specific image.
-
-
-## Instructions
-
-First put the ROS bag to process in the `dataset_tools` folder, then the following steps will generate a folder of the aforementioned format.
-
-### Extract images and IMU measurements from bags
-For monocular
+## Images and IMU
 
 ```bash
-./prepare_dataset_monocular <bag_name> <img_topic> <imu_topic>
+ros2 run svo_benchmarking prepare_dataset_monocular.sh /absolute/recording \
+  /cam0/image_raw /imu /absolute/datasets/mono
+ros2 run svo_benchmarking prepare_dataset_stereo.sh /absolute/recording.mcap \
+  /cam0/image_raw /cam1/image_raw /imu /absolute/datasets/stereo
 ```
-and stereo
-```bash
-./prepare_dataset_monocular.sh <bag_name> <img0_topic> <img1_topic> <imu_topic>
-```
 
-### Extract groundtruth
-**EuRoC**
+Both raw Image and CompressedImage are decoded to grayscale PNG. Stereo pairing requires exactly equal timestamps and rejects unmatched/duplicate entries. The original image lists remain available for inspection.
 
-Use the script `python/asl_to_groundtruth_to_pose.py` to convert the groundtruth in EuRoC to our format.
-
-**ROS bags**
-
-Run the script:
+For individual exports or a four-camera dataset:
 
 ```bash
-./generate_ground_truth.sh <bag_name> <groundtruth_topic> <hand_eye>
+ros2 run svo_benchmarking bag_to_image.py /absolute/recording /cam0/image_raw 0 \
+  --output /absolute/dataset/data/images_0.txt
+ros2 run svo_benchmarking bag_to_imu.py /absolute/recording /imu \
+  --output /absolute/dataset/data/imu.txt
 ```
-The script uses `python/bag_to_pose.py` to extract pose messages. By default, `PoseStamped` is used. You can modify the script for other message types. 
 
-The parameter `<hand_eye>` specify the hand-eye calibration to apply to the groundtruth.
-It will look for `handeye_tfs/handeye_<hand_eye>.yaml`.
-If it is `none`, then no hand-eye transformation is applied.
+Repeat image export per camera and construct a synchronized four-path index for the array offline entry. Supply an appropriate four-camera calibration and use the traditional build. Copy a verified calibration into the external dataset as `calib.yaml`; no calibration is inferred from bag messages.
 
+## Reference and hand-eye transform
 
-### Copy essential files
-The last steps are to put what we extracted to the folder from which the benchmark tool will read:
+```bash
+ros2 run svo_benchmarking generate_ground_truth.sh /absolute/recording /reference_pose \
+  /absolute/datasets/stereo none
+ros2 run svo_benchmarking generate_ground_truth.sh /absolute/recording /reference_pose \
+  /absolute/datasets/stereo /absolute/hand_eye.txt
+```
 
-1. Copy the sensor calibration file into the generated  dataset folder (see examples in `svo_benchmarking/data`). Rename it to `calib.yaml` (or change the name in the `experiment.yaml` file when running the benchmarking).
+Supported messages are PoseStamped, PoseWithCovarianceStamped, Odometry, PointStamped (identity rotation), and TransformStamped. The hand-eye file is a whitespace- or comma-delimited 4×4 matrix; poses are right-multiplied by it. The wrapper associates image/reference timestamps and creates a TUM reference without changing source files.
 
-2. move the dataset folder to `svo_benchmarking/data`.
+EuRoC CSV reference conversion:
 
-Now the dataset is ready for benchmarking. For the correct structure, one can check some examples under `data/euroc/stereo` (images are omitted).
+```bash
+ros2 run svo_benchmarking asl_groundtruth_to_pose.py /absolute/state_groundtruth/data.csv \
+  --output /absolute/dataset/data/groundtruth.txt
+ros2 run svo_benchmarking strip_gt_id.py /absolute/dataset/data/groundtruth.txt
+```
 
+## Native bag rewriting
 
-## Diverse Scripts
-It is common that you have to deal with other dataset format. There are some scripts under `python` that may be of use. For example:
+```bash
+ros2 run svo_benchmarking restamp_bag.py -i /absolute/source -o /absolute/new_bag --storage mcap
+```
 
-* `prepend_id.py`: will prepend an increasing `id` field to a text file per line.
-* `swap_stamped_imu_meas`: swap the order of accelerometer and gyroscope measurements.
-* ...
+Output must not already exist. Available standard message headers become bag record timestamps. Unknown custom messages retain serialized payload and original record timestamps, so their message packages need not be installed. Storage choices are `mcap` and `sqlite3`; rewriting neither changes message header stamps nor calibrates sensors.
 
-Many of the scripts are already used in the previous instructions.
-
+Other installed helpers include `prepend_id.py`, `swap_stamped_imu_meas.py`, `change_image_path.py`, `combine_images.py`, `associate_timestamps.py` and `transform_trajectory.py`; inspect `--help` for arguments. Review the output format before feeding a different dataset into the estimator.

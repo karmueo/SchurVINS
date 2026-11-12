@@ -1,9 +1,9 @@
 In this document, we will see how to use `SVO` with stereo setup and IMU information. We will also see how to adapt the parameters for a different resolution.
 
-Let's start with an example first. Download the dataset from http://rpg.ifi.uzh.ch/datasets/fla_stereo_imu.bag. This bag file contains synchronized stereo images and IMU measurements. You can run `SVO` on this bag by
+Start with a native ROS2 recording containing synchronized stereo images and IMU. Historical FLA calibration examples below explain the model; the migration does not add a ROS1 bag compatibility reader. Run the recording with:
 
-    roslaunch svo_ros fla_stereo_imu.launch
-    rosbag play fla_stereo_imu.bag
+    ros2 launch svo_ros svo.launch.py pipeline:=stereo calib_file:=/absolute/fla_calibration.yaml output_dir:=/absolute/fla-results
+    ros2 bag play /absolute/fla_ros2_recording --clock --rate 0.25
 
 Now we will go through important things that need to be specified.
 

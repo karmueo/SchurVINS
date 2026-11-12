@@ -4,37 +4,17 @@ The visual-inertial odometry consists of the SVO 2.0 frontend and OKVIS style sl
 
 Loop closure and correction using DBoW2 is also supported, but we are relative conservative on regarding loop corrections (i.e., only very good match results after 2D-2D/2D-3D check + large pose correction will be accepted). In brief, we additionally extract ORB features for the purpose of loop closure, and the depths of these ORB features are estimated using depth filters.
 
-## Examples on EuRoC
-Source the workspace first:
-```sh
-source ~/svo_ws/devel/setup.bash
+## ROS2 Jazzy operation
+
+Build the traditional profile (`USE_SCHUR_VINS=OFF`) for monocular VIO and the Ceres frontend/backend combination. The default profile runs stereo SchurVINS + IMU. In a sourced selected install:
+
+```bash
+ros2 launch svo_ros euroc_vio_mono.launch.py output_dir:="$HOME/schurvins-results/mono"
+ros2 bag play /absolute/ros2_euroc --clock --rate 0.25
 ```
 
-## Monocular VIO
-```sh
-# launch svo
-roslaunch svo_ros euroc_vio_mono.launch
-# run the EuRoC bag
-rosbag play V2_02_medium.bag -s 10
-```
-You might need to adjust a starting time to get the monocular pipeline started properly, as in the pure monocular case. You should be able to see a visualization like this:
+For default stereo use `euroc_vio_stereo.launch.py`. The input must be native ROS2 MCAP or SQLite3. Preserve the documented sequence start offsets when comparing runs. Runtime parameters are under `ros__parameters` with dot-separated names; calibration uses camera poses `T_B_C`. See [ROS2_JAZZY.md](ROS2_JAZZY.md) for configuration, component lifecycle and validation requirements.
 
-
+The historical image below illustrates the Ceres backend landmarks and loop constraints; it is not a Jazzy validation result.
 
 ![](./images/v202_mono_vio.gif)
-
-where the green points are the landmarks optimized by the backend, which are fed back to the frontend for tracking. The brighter the color, the newer the landmarks are.
-
-You will also see line segments that connecting the current frame and the past keyframes. Thoes indicates loop closures, where a red line indicates successful recognition and a green one indicates actual pose correction.
-
-## Stereo VIO
-```sh
-# launch svo
-roslaunch svo_ros euroc_vio_stereo.launch
-# run the EuRoC bag
-rosbag play V2_03_difficult.bag
-```
-You should be able to see similar visualization as in the monocular case.
-
-## Parameters
-The above launch files use the parameters in `svo_ros/param/vio_mono` and `svo_ros/param/vio_stere`. They are essentially identical, except for the flat `pipeline_is_stereo` to indicate whether stereo or monocular setup should be used.
