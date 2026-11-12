@@ -145,8 +145,8 @@ FrameHandlerBase::FrameHandlerBase(const BaseOptions& base_options, const Reproj
   if (options_.poseoptim_using_unit_sphere)
     pose_optimizer_->setErrorType(PoseOptimizer::ErrorType::kBearingVectorDiff);
 
-  bool user_schur_vins = true;
-  if (user_schur_vins) {
+  #ifdef USE_SCHUR_VINS
+  {
     const int WINDOW_SIZE = options_.window_size_;
     double OBS_DEV = options_.obs_dev_;
 
@@ -167,6 +167,8 @@ FrameHandlerBase::FrameHandlerBase(const BaseOptions& base_options, const Reproj
     schur_vins_->InitChi2(0.95);              // init chi test ratio
     svo::LocalFeature::unit_sphere = false;   // set feature unit sphere
   }
+
+  #endif
 
   // DEBUG ***
   //pose_optimizer_->initTracing(options_.trace_dir);

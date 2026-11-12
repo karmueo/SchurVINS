@@ -59,7 +59,7 @@ void SchurVINS::InitExtrinsic(const svo::CameraBundle::Ptr camera_bundle) {
     T_imu_cam0 = camera_bundle->get_T_C_B(0).inverse();
     // LOG(INFO) << "cam0 extrinsic, q_i_c:\n" << T_imu_cam0;
     if (camera_num > 1) {
-        cam0_param = camera_bundle->getCameraShared(1);
+        cam1_param = camera_bundle->getCameraShared(1);
         T_imu_cam1 = camera_bundle->get_T_C_B(1).inverse();
         stereo = true;
         // LOG(INFO) << "cam1 extrinsic, q_i_c:\n" << T_imu_cam1;
