@@ -695,7 +695,7 @@ void BenchmarkNode::runArrayBenchmark(const std::string& dataset_dir)
     // load image
     uint64_t stamp = 0;
     std::string imgname1, imgname2, imgname3, imgname4;
-    img_fs >> stamp >> imgname1 >> imgname2 >> imgname3 >> imgname4;
+    if (!(img_fs >> stamp >> imgname1 >> imgname2 >> imgname3 >> imgname4)) break;
     if (stamp < first_frame_id)
       continue;
     std::string();
@@ -723,10 +723,16 @@ void BenchmarkNode::runArrayBenchmark(const std::string& dataset_dir)
 int main(int argc, char** argv)
 {
   google::InitGoogleLogging(argv[0]);
-  google::ParseCommandLineFlags(&argc, &argv, true);
+  rclcpp::init(argc, argv);
+  auto flag_strings = rclcpp::remove_ros_arguments(argc, argv);
+  std::vector<char*> flag_pointers;
+  for (auto& flag : flag_strings) flag_pointers.push_back(flag.data());
+  flag_pointers.push_back(nullptr);
+  int flag_count = static_cast<int>(flag_strings.size());
+  char** flag_argv = flag_pointers.data();
+  google::ParseCommandLineFlags(&flag_count, &flag_argv, true);
   google::InstallFailureSignalHandler();
 
-  rclcpp::init(argc, argv);
   rclcpp::Node node("svo");
   auto& nh = node;
   auto& pnh = node;

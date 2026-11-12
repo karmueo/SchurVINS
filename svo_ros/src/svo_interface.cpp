@@ -46,6 +46,7 @@ SvoInterface::SvoInterface(
   , automatic_reinitialization_(
       vk::param<bool>(pnh_, "automatic_reinitialization", false))
 {
+  if (!google::IsGoogleLoggingInitialized()) google::InitGoogleLogging("svo");
   switch (pipeline_type)
   {
     case PipelineType::kMono:
