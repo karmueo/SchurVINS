@@ -40,7 +40,7 @@ colcon --log-base log-default build --base-paths src/SchurVINS \
 source install-default/setup.bash
 ```
 
-The default estimator is stereo SchurVINS with IMU. Build the separate traditional profile for monocular, visual-only and four-camera offline processing. Global mapping uses the full profile; it remains disabled by default. See [contributing](CONTRIBUTING.md) for the package layout and checks.
+The default estimator is stereo SchurVINS with IMU. Build the separate traditional profile for monocular, visual-only and four-camera offline processing. Global mapping uses the full profile; it remains disabled by default. See [contributing](CONTRIBUTING.md) for the package layout and checks. Actual build, feature and dataset results are recorded in the [migration validation matrix](doc/MIGRATION_VALIDATION.md).
 
 ## 3. EGO stereo + IMU
 
