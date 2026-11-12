@@ -13,7 +13,7 @@
 | nodelet | `svo_ros::SvoNodeBase` | 独立 `svo_node` 和组件共用实现 |
 | ROS1 硬件 nodelet launch | `live_components.launch.py` | 接标准 ROS2 驱动话题，未作硬件实机验证 |
 
-`q` 停止本实例输入并排空已接收队列；不关闭组件容器。`r` 刷新旧输出并完整销毁、重建估计器和 IMU，建立新运行目录，然后等待 `s`。`s` 启动，`c/C` 开启/关闭光度补偿。时间倒退或队列溢出使当前运行失败，必须重启；暂停播放不重置状态。退出时无法配对或无 IMU 覆盖的尾帧明确记为失败。
+`q` 停止本实例输入并排空已接收队列；不关闭组件容器。`r` 刷新旧输出并完整销毁、重建估计器和 IMU，建立新运行目录，然后等待 `s`。等待期间输入分别计入 idle_images/idle_imu，不累积历史队列；重启使用新输入。`s` 启动，`c/C` 开启/关闭光度补偿。时间倒退或队列溢出使当前运行失败，必须重启；暂停播放不重置状态。退出时无法配对或无 IMU 覆盖的尾帧明确记为失败。
 
 输出包括 `imu_traj.txt`（TUM、world 下 IMU 位姿）、`frames.csv`、`effective_config.yaml` 和 `summary.json`。状态话题 `/svo/runtime_status` 提供真实估计器调用数、位姿数、队列、inflight、前导跳过、溢出及回跳统计；自动回放需在原始输入计数完整后等待图像队列为空且 inflight=false，再发布 q 并等待 stopped=true 和两个队列为空。尾部 IMU 在 q 前暂存，避免晚到的下一帧失去历史覆盖，awaiting_images=true 显式标记此状态。
 

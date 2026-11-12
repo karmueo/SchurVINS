@@ -80,6 +80,7 @@ void SvoNodeBase::createEstimator()
   frames_.open(run_dir_ + "/frames.csv");
   if (!frames_) throw std::runtime_error("Cannot open frame statistics");
   frames_ << "timestamp_ns,status,stage,processing_ms,pose_available\n";
+  invalid_images_ = invalid_imu_ = idle_images_ = idle_imu_ = 0;
   processed_ = poses_ = tracking_lost_ = 0;
   initialization_seconds_ = -1.0; first_processed_stamp_ = -1;
   previous_stage_ = -1; durations_ms_.clear(); start_ = std::chrono::steady_clock::now();
@@ -103,20 +104,35 @@ void SvoNodeBase::saveConfiguration()
 }
 void SvoNodeBase::image(size_t camera, Image msg)
 {
-  if (!msg || msg->width == 0 || msg->height == 0 || msg->data.empty()) return;
   std::lock_guard<std::mutex> lock(mutex_);
   if (quit_ || failed_ || draining_) return;
+  if (idle_) { ++idle_images_; return; }
+  if (!msg || msg->header.stamp.sec < 0 || msg->width == 0 || msg->height == 0 || msg->data.empty())
+  {
+    ++invalid_images_; ++scheduler_->counters.image_messages;
+    failed_ = true; error_ = "invalid image input"; changed_.notify_one(); return;
+  }
   const auto stamp = rclcpp::Time(msg->header.stamp).nanoseconds();
   scheduler_->image(camera, stamp, std::move(msg));
   changed_.notify_one();
 }
 void SvoNodeBase::imu(Imu msg)
 {
-  if (!msg) return;
-  const auto& a = msg->linear_acceleration; const auto& w = msg->angular_velocity;
-  if (!std::isfinite(a.x+a.y+a.z+w.x+w.y+w.z)) return;
   std::lock_guard<std::mutex> lock(mutex_);
   if (quit_ || failed_ || draining_) return;
+  if (idle_) { ++idle_imu_; return; }
+  bool valid = msg && msg->header.stamp.sec >= 0;
+  if (valid)
+  {
+    const auto& a = msg->linear_acceleration; const auto& w = msg->angular_velocity;
+    valid = std::isfinite(a.x) && std::isfinite(a.y) && std::isfinite(a.z) &&
+            std::isfinite(w.x) && std::isfinite(w.y) && std::isfinite(w.z);
+  }
+  if (!valid)
+  {
+    ++invalid_imu_; ++scheduler_->counters.imu_received;
+    failed_ = true; error_ = "invalid IMU input"; changed_.notify_one(); return;
+  }
   const auto stamp = rclcpp::Time(msg->header.stamp).nanoseconds();
   scheduler_->imu(stamp, std::move(msg));
   changed_.notify_one();
@@ -132,6 +148,9 @@ std::string SvoNodeBase::statusLocked() const
       << ",\"time_jumps\":" << c.time_jumps << ",\"duplicates\":" << c.duplicates
       << ",\"pending_images\":" << scheduler_->pendingImages() << ",\"pending_imu\":" << scheduler_->pendingImu()
       << ",\"awaiting_images\":" << (scheduler_->pendingImages() == 0 && scheduler_->pendingImu() != 0 ? "true" : "false")
+      << ",\"invalid_images\":" << invalid_images_ << ",\"invalid_imu\":" << invalid_imu_
+      << ",\"idle_images\":" << idle_images_ << ",\"idle_imu\":" << idle_imu_
+      << ",\"idle\":" << (idle_ ? "true" : "false")
       << ",\"inflight\":" << (inflight_ ? "true" : "false")
       << ",\"initialization_seconds\":" << initialization_seconds_
       << ",\"resets\":" << resets_ << ",\"tracking_lost\":" << tracking_lost_
@@ -166,8 +185,8 @@ void SvoNodeBase::worker()
   {
     while (!quit_)
     {
-      changed_.wait(lock, [this, &waiting_for_prior] { return quit_ || draining_ || scheduler_->stopped() || !commands_.empty() || scheduler_->canTakeImu(waiting_for_prior || (draining_ && scheduler_->pendingImages() == 0)) || (!idle_ && !waiting_for_prior && scheduler_->ready()); });
-      if (quit_) break;
+      changed_.wait(lock, [this, &waiting_for_prior] { return quit_ || failed_ || draining_ || scheduler_->stopped() || !commands_.empty() || scheduler_->canTakeImu(waiting_for_prior || (draining_ && scheduler_->pendingImages() == 0)) || (!idle_ && !waiting_for_prior && scheduler_->ready()); });
+      if (quit_ || failed_) break;
       if (scheduler_->stopped())
       {
         failed_ = true;

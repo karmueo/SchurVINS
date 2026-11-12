@@ -48,6 +48,7 @@ private:
   double initialization_seconds_ = -1.0;
   int64_t first_processed_stamp_ = -1;
   size_t cameras_ = 2;
+  uint64_t invalid_images_ = 0, invalid_imu_ = 0, idle_images_ = 0, idle_imu_ = 0;
   uint64_t processed_ = 0, poses_ = 0, resets_ = 0, tracking_lost_ = 0;
   int previous_stage_ = -1;
   std::string output_root_, run_dir_, error_;
