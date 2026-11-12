@@ -16,7 +16,7 @@ def generate_launch_description():
         DeclareLaunchArgument('dataset_is_kitti', default_value='false'),
         DeclareLaunchArgument('dataset_is_blender', default_value='false'),
         DeclareLaunchArgument('output_dir', default_value='/tmp/schurvins-results'),
-        Node(package='svo_ros', executable='benchmark_node', name='svo', output='screen', parameters=[
+        Node(package='svo_ros', executable='svo_benchmark', name='svo', output='screen', parameters=[
             str(share/'param/vio_stereo.yaml'), {
                 'dataset_directory':LaunchConfiguration('dataset_directory'), 'calib_file':LaunchConfiguration('calib_file'),
                 'output_dir':LaunchConfiguration('output_dir'),
