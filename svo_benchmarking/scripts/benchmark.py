@@ -51,7 +51,7 @@ def copy_files_to_tracedir(dataset_dir, trace_dir, files_to_copy=None):
                                 os.path.join(trace_dir, os.path.basename(fn)))
 
 
-def run_single_experiment(params, node='svo_ros', node_name='benchmark'):
+def run_single_experiment(params, node='svo_ros', node_name='svo_benchmark'):
 
     # Load dataset parameters
     params['dataset_is_blender'] = False
@@ -137,6 +137,9 @@ def run_experiments(experiment_file, num_monte_carlo_runs=None,
         else:
             num_monte_carlo_runs = 1
 
+    if num_monte_carlo_runs < 1:
+        raise ValueError('n_trials must be positive')
+
     # store the trace directories of all datasets
     trace_dirs = list()
 
@@ -167,6 +170,8 @@ def run_experiments(experiment_file, num_monte_carlo_runs=None,
             cur_params = dict(list(cur_params.items()) + list(dataset_params.items()))
         else:
             cur_params['dataset_name'] = dataset_cfg['name']
+
+        cur_params.setdefault('dataset_name', dataset_cfg['name'])
 
         # trace directory
         trace_name = (dataset_cfg['name'].split('/'))[-1]
