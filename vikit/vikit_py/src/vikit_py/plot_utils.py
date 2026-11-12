@@ -7,7 +7,7 @@ from matplotlib import rc
 
 # tell matplotlib to use latex font
 rc('font',**{'family':'serif','serif':['Cardo']})
-rc('text', usetex=True)
+rc('text', usetex=False)
 
 def axis_equal_3d(ax):
     extents = np.array([getattr(ax, 'get_{}lim'.format(dim))() for dim in 'xyz'])

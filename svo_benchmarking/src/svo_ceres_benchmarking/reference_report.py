@@ -24,11 +24,15 @@ def associate(estimate, reference, tolerance=0.01):
 
 
 def report(estimate_path, reference_path, output, tolerance=0.01):
+    if not np.isfinite(tolerance) or tolerance <= 0:
+        raise ValueError('Time tolerance must be finite and positive')
     estimate = np.atleast_2d(np.loadtxt(estimate_path))
     reference = np.atleast_2d(np.loadtxt(reference_path))
     for name, values in [('estimate', estimate), ('reference', reference)]:
         if values.shape[1] != 8 or not np.isfinite(values).all():
             raise ValueError(f'{name} must contain finite TUM timestamp xyz xyzw rows')
+        if np.any(np.linalg.norm(values[:, 4:8], axis=1) < 1e-12):
+            raise ValueError(f'{name} contains a zero quaternion')
         if np.any(np.diff(values[:, 0]) <= 0):
             raise ValueError(f'{name} timestamps must be strictly increasing')
     pairs = associate(estimate, reference, tolerance)
@@ -66,6 +70,8 @@ def report(estimate_path, reference_path, output, tolerance=0.01):
         'alignment': 'SE(3), scale fixed to 1', 'time_tolerance_seconds': tolerance,
         'associated_poses': len(pairs), 'estimate_poses': len(estimate),
         'reference_poses': len(reference), 'association_coverage': len(pairs) / len(estimate),
+        'overlap_estimate_poses': int(np.count_nonzero((estimate[:, 0] >= reference[0, 0]) &
+                                                       (estimate[:, 0] <= reference[-1, 0]))),
         'overlap_start': float(est[0, 0]), 'overlap_end': float(est[-1, 0]),
         'ate_position_rmse_m': rmse(np.linalg.norm(aligned - rx, axis=1)),
         'rpe_interval_seconds': 1.0, 'rpe_pairs': len(rpe_translation),

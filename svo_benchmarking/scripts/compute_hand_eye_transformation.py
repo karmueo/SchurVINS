@@ -14,7 +14,7 @@ import svo_benchmarking.hand_eye_calib as hand_eye
 import svo_benchmarking.results_loading as res_load
 
 rc('font', **{'family': 'serif', 'serif': ['Cardo']})
-rc('text', usetex=True)
+rc('text', usetex=False)
 FORMAT = '.png'
 
 init(autoreset=True)

@@ -12,6 +12,8 @@ import time
 import ros_node
 import evaluate
 import shutil
+import copy
+from pathlib import Path
 
 import subprocess
 import re
@@ -76,6 +78,12 @@ def run_single_experiment(params, node='svo_ros', node_name='benchmark'):
     node = ros_node.RosNode(node, node_name)
     node.run(params, '', True, params['trace_dir'])
 
+    runs = sorted(Path(params['output_dir']).glob('benchmark_*'))
+    if len(runs) != 1:
+        raise RuntimeError(f'Expected one benchmark run under {params["output_dir"]}; found {runs}')
+    params['trace_dir'] = str(runs[0])
+    copy_files_to_tracedir(params['dataset_directory'], params['trace_dir'], params.get('files_to_copy'))
+
     # dump experiment params to file and copy the other parameter files:
     params['platform'] = get_cpu_info()
     params['ros_node'] = node._package
@@ -86,11 +94,11 @@ def run_single_experiment(params, node='svo_ros', node_name='benchmark'):
 
 
 def run_experiments(experiment_file, num_monte_carlo_runs=None,
-                    align_type='posyaw', n_aligned=-1):
-    experiment_file = experiment_file.replace('.yaml', '')
-    experiment_params_file = os.path.join(
-        get_package_share_directory('svo_benchmarking'),
-        'experiments', experiment_file+'.yaml')
+                    align_type='posyaw', n_aligned=-1, dataset_root=None, output_dir=None):
+    requested = Path(experiment_file).expanduser()
+    experiment_params_file = str(requested.resolve()) if requested.is_file() else os.path.join(
+        get_package_share_directory('svo_benchmarking'), 'experiments', requested.stem + '.yaml')
+    experiment_file = requested.stem
 
     # Load base algorithm parameters.
     experiment_params = yaml.safe_load(open(experiment_params_file, 'r'))
@@ -115,7 +123,9 @@ def run_experiments(experiment_file, num_monte_carlo_runs=None,
     # Get base folder where trace-folder is created.
     trace_base_dir = os.path.join(
         os.environ.get('SVO_OUTPUT_DIR', os.path.expanduser('~/schurvins-results')), 'experiments')
-    if 'trace_base_dir' in experiment_params:
+    if output_dir is not None:
+        trace_base_dir = str(Path(output_dir).expanduser().resolve())
+    elif 'trace_base_dir' in experiment_params:
         trace_base_dir = experiment_params['trace_base_dir']
         print(("Overwrite the default trace directory with {0}.".format(
             trace_base_dir)))
@@ -134,14 +144,16 @@ def run_experiments(experiment_file, num_monte_carlo_runs=None,
     for dataset_cfg in experiment_params['datasets']:
 
         # Overwrite and extend base parameters with dataset specific settings:
-        cur_params = base_params.copy()
+        cur_params = copy.deepcopy(base_params)
         if 'settings' in dataset_cfg:
             cur_params.update(dataset_cfg['settings'])
 
         # Check if dataset directory exists
-        cur_params['dataset_directory'] = os.path.join(
-            get_package_share_directory('svo_benchmarking'),
-            'data', dataset_cfg['name'])
+        dataset_location = dataset_cfg.get('directory', dataset_cfg['name'])
+        root = dataset_root or experiment_params.get('dataset_root') or os.environ.get('SVO_DATASET_DIR')
+        if not Path(dataset_location).is_absolute() and root is None:
+            raise ValueError('Set --dataset-root, dataset_root in YAML, or SVO_DATASET_DIR')
+        cur_params['dataset_directory'] = str((Path(root or '.') / dataset_location).expanduser().resolve())
         assert os.path.exists(cur_params['dataset_directory']),\
             "Dataset {0} does not exist.".format(
                 cur_params['dataset_directory'])
@@ -199,7 +211,11 @@ def run_experiments(experiment_file, num_monte_carlo_runs=None,
         for trial_idx in range(num_monte_carlo_runs):
             print((Fore.RED+">>> Trial {0}...".format(trial_idx)))
 
-            params_i = cur_params.copy()
+            params_i = copy.deepcopy(cur_params)
+            params_i['trace_dir'] = str(Path(cur_params['trace_dir']) / f'trial_{trial_idx:03d}')
+            Path(params_i['trace_dir']).mkdir(parents=True, exist_ok=False)
+            params_i['output_dir'] = params_i['trace_dir']
+            copy_files_to_tracedir(params_i['dataset_directory'], params_i['trace_dir'])
 
             if num_monte_carlo_runs == 1:
                 params_i['flags']['trial_idx'] = -1
@@ -239,6 +255,9 @@ if __name__ == "__main__":
     parser.add_argument('--n_aligned', type=int,
                         help='Number of frames to be aligned',
                         default=-1)
+    parser.add_argument('--dataset-root', help='External dataset directory (never package share)')
+    parser.add_argument('--output-dir', help='Writable external experiment output directory')
     args = parser.parse_args()
 
-    run_experiments(args.experiment_file, args.n_trials, args.align_type)
+    run_experiments(args.experiment_file, args.n_trials, args.align_type, args.n_aligned,
+                    args.dataset_root, args.output_dir)

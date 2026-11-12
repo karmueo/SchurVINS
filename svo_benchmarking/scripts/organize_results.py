@@ -2,7 +2,7 @@
 
 import argparse
 import os
-from ament_index_python.packages import get_package_share_directory
+from pathlib import Path
 import shutil
 
 
@@ -19,13 +19,13 @@ if __name__ == '__main__':
     parser.add_argument('-success_flag',
                         help='create a SUCESS flag in the result folder',
                         action='store_true')
+    parser.add_argument('--output-dir', default=str(Path.home() / 'schurvins-results' / 'organized'))
     args = parser.parse_args()
 
-    results_top = os.path.join(get_package_share_directory(
-        'svo_benchmarking'), 'results')
+    results_top = os.path.abspath(os.path.expanduser(args.output_dir))
     print(("Top directory for results is {0}".format(results_top)))
 
-    results_from = os.path.join(results_top, args.results_dir)
+    results_from = os.path.abspath(os.path.expanduser(args.results_dir))
     assert os.path.isdir(results_from), \
         "Specified results_dir does not exist {0}".format(results_from)
     print(("Will organize results from {0}".format(results_from)))
@@ -53,7 +53,7 @@ if __name__ == '__main__':
             os.makedirs(to_d)
         suc_flag = os.path.join(to_d, 'SUCCESS')
         if args.success_flag and not os.path.isfile(suc_flag):
-            os.mknod(suc_flag)
+            Path(suc_flag).touch()
 
         print(("{0} -> {1}".format(from_d, to_d)))
         for f in os.listdir(from_d):

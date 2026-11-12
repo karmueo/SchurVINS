@@ -6,6 +6,7 @@
 import os
 import argparse
 import yaml
+import subprocess
 
 from colorama import init, Fore
 
@@ -13,21 +14,13 @@ init(autoreset=True)
 
 
 def run_evaluation_script(trace_dir, script):
-    command = 'ros2 run ' + script['ros_node'] + ' ' + script['ros_executable']
-    # position parameters
-    if 'params' in script:
-        for param in script['params']:
-            if param == 'trace_dir':
-                command += " " + trace_dir
-            else:
-                command += " " + param
-    # flags
-    if 'flags' in script:
-        for key, option in list(script['flags'].items()):
-            command += ' --'+str(key)+'='+str(option)
-    print((Fore.RED+'==> Staring: '+command))
-    os.system(command)
-    print((Fore.GREEN+'<== Finished'))
+    command = ['ros2', 'run', script['ros_node'], script['ros_executable']]
+    for value in script.get('params', []):
+        command.append(trace_dir if value == 'trace_dir' else str(value))
+    for key, value in script.get('flags', {}).items():
+        command.append(f'--{key}={value}')
+    print('Starting:', command)
+    subprocess.run(command, check=True)
 
 
 def evaluate_dataset(trace_dir):

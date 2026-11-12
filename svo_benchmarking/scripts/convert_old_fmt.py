@@ -1,45 +1,42 @@
 #!/usr/bin/env python3
-
-import os
+"""Convert legacy id-keyed benchmark estimates to TUM using groundtruth matches."""
 import argparse
-import subprocess
+from pathlib import Path
+import numpy as np
 
 
-kNsToEstFnMapping = {'traj_est': 'stamped_traj_estimate',
-                     'pose_graph': 'stamped_pose_graph_estimate'}
-kNsToAlgoMapping = {'traj_est': 'svo_ceres_lc',
-                    'pose_graph': 'svo_ceres_lc_pg'}
-# kNsToAlgoMapping = {'traj_est': 'svo_ceres_nolc'}
-kFnExt = '.txt'
+def convert(directory):
+    directory = Path(directory)
+    groundtruth = np.atleast_2d(np.loadtxt(directory / 'groundtruth.txt'))
+    estimate = np.atleast_2d(np.loadtxt(directory / 'traj_estimate.txt'))
+    if groundtruth.shape[1] != 9:
+        raise ValueError('groundtruth.txt must be id timestamp xyz xyzw')
+    np.savetxt(directory / 'stamped_groundtruth.txt', groundtruth[:, 1:], fmt='%.12f')
+    if estimate.shape[1] == 9:
+        stamped = estimate[:, 1:]
+    elif estimate.shape[1] == 8:
+        matches = np.atleast_2d(np.loadtxt(directory / 'groundtruth_matches.txt', dtype=int))
+        reference_stamps = {int(row[0]): row[1] for row in groundtruth}
+        matched_ids = {int(row[0]): int(row[1]) for row in matches}
+        rows = []
+        for row in estimate:
+            gt_id = matched_ids.get(int(row[0]))
+            if gt_id in reference_stamps:
+                rows.append([reference_stamps[gt_id], *row[1:]])
+        stamped = np.asarray(rows)
+        if not len(stamped):
+            raise ValueError(f'No matched legacy estimates in {directory}')
+    else:
+        raise ValueError('Estimate must be id xyz xyzw or id timestamp xyz xyzw')
+    np.savetxt(directory / 'stamped_traj_estimate0.txt', stamped, fmt='%.12f')
+    return len(stamped)
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(
-        description='''Organize reuslts for analysis.''')
-    parser.add_argument(
-        'result_dir', type=str,
-        help="Folder containing the groundtruth and the estimate.")
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('result_dir')
     args = parser.parse_args()
-
-    abs_res_dir = os.path.abspath(args.result_dir)
-    assert os.path.exists(abs_res_dir), "Result folder does not exist."
-
-    res_dirs = [v for v in os.listdir(abs_res_dir)
-                if os.path.isdir(os.path.join(abs_res_dir, v))]
-    res_dirs.sort()
-    print(("Found directories {0}".format(res_dirs)))
-
-    for d in res_dirs:
-        print(("Processing {0}...".format(d)))
-        abs_dir = os.path.join(abs_res_dir, d)
-        subprocess.call(
-            ['ros2', 'run', 'rpg_trajectory_evaluation',
-             'stamp_state_est_using_matches.py', 'traj_estimate.txt'],
-            cwd=abs_dir)
-        subprocess.call(
-            ['ros2', 'run', 'rpg_trajectory_evaluation', 'strip_gt_id.py',
-             'groundtruth.txt'], cwd=abs_dir)
-        subprocess.call(
-            ['mv', 'stamped_traj_estimate.txt', 'stamped_traj_estimate0.txt'],
-            cwd=abs_dir)
-
+    root = Path(args.result_dir).resolve()
+    folders = [root] if (root / 'traj_estimate.txt').exists() else sorted(p for p in root.iterdir() if p.is_dir())
+    for folder in folders:
+        print(f'{folder}: {convert(folder)} poses')

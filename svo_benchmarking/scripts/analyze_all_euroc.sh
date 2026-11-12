@@ -1,16 +1,8 @@
-#!/bin/bash
-
-ros2 run rpg_trajectory_evaluation analyze_trajectory_single.py ./MH_01 --recalculate_errors --mul_trials 5 --est_types traj_est pose_graph
-ros2 run rpg_trajectory_evaluation analyze_trajectory_single.py ./MH_02 --recalculate_errors --mul_trials 5 --est_types traj_est pose_graph
-ros2 run rpg_trajectory_evaluation analyze_trajectory_single.py ./MH_03 --recalculate_errors --mul_trials 5 --est_types traj_est pose_graph
-ros2 run rpg_trajectory_evaluation analyze_trajectory_single.py ./MH_04 --recalculate_errors --mul_trials 5 --est_types traj_est pose_graph
-ros2 run rpg_trajectory_evaluation analyze_trajectory_single.py ./MH_05 --recalculate_errors --mul_trials 5 --est_types traj_est pose_graph
-
-
-ros2 run rpg_trajectory_evaluation analyze_trajectory_single.py ./V1_01 --recalculate_errors --mul_trials 5 --est_types traj_est pose_graph
-ros2 run rpg_trajectory_evaluation analyze_trajectory_single.py ./V1_02 --recalculate_errors --mul_trials 5 --est_types traj_est pose_graph
-ros2 run rpg_trajectory_evaluation analyze_trajectory_single.py ./V1_03 --recalculate_errors --mul_trials 5 --est_types traj_est pose_graph
-
-ros2 run rpg_trajectory_evaluation analyze_trajectory_single.py ./V2_01 --recalculate_errors --mul_trials 5 --est_types traj_est pose_graph
-ros2 run rpg_trajectory_evaluation analyze_trajectory_single.py ./V2_02 --recalculate_errors --mul_trials 5 --est_types traj_est pose_graph
-ros2 run rpg_trajectory_evaluation analyze_trajectory_single.py ./V2_03 --recalculate_errors --mul_trials 5 --est_types traj_est pose_graph
+#!/usr/bin/env bash
+set -euo pipefail
+if [[ $# != 2 ]]; then
+  echo "Usage: $0 RESULT_ROOT REPORT_OUTPUT_DIRECTORY" >&2
+  exit 2
+fi
+# Analyze all available estimate variants/trials, without an external evaluator.
+ros2 run svo_benchmarking reference_report.py "$1" "$2" --batch

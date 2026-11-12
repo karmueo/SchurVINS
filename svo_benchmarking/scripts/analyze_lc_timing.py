@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 from matplotlib import rc
 
 rc('font', **{'family': 'serif', 'serif': ['Cardo']})
-rc('text', usetex=True)
+rc('text', usetex=False)
 
 FORMAT = '.pdf'
 

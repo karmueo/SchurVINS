@@ -14,7 +14,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     subfolders = [v for v in os.listdir(args.top_dir)
-                  if os.path.join(args.top_dir, v)]
+                  if os.path.isdir(os.path.join(args.top_dir, v))]
     print(("Going to evaluate the following folders:{0}".format(subfolders)))
     subfolders = [os.path.join(args.top_dir, v) for v in subfolders]
 

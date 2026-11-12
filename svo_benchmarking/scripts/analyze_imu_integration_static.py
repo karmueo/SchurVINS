@@ -14,7 +14,7 @@ import svo_benchmarking.results_loading as res_load
 import svo_benchmarking.dataset_loading as data_load
 
 rc('font', **{'family': 'serif', 'serif': ['Cardo']})
-rc('text', usetex=True)
+rc('text', usetex=False)
 FORMAT = '.png'
 
 init(autoreset=True)

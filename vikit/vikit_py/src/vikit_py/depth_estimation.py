@@ -6,7 +6,7 @@ from scipy.stats import norm
 import matplotlib.pyplot as plt
 from matplotlib import rc
 rc('font',**{'family':'serif','serif':['Cardo']})
-rc('text', usetex=True)
+rc('text', usetex=False)
 
 def q_of_Z_pi(Z, RHO, mu_sigma2_a_b):
     q = norm.pdf(Z, mu_sigma2_a_b[0], np.sqrt(mu_sigma2_a_b[1])) * beta.pdf(RHO, mu_sigma2_a_b[2], mu_sigma2_a_b[3]);
