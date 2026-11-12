@@ -506,9 +506,10 @@ FrameHandlerArray::Ptr makeArray(rclcpp::Node& pnh, const CameraBundlePtr& cam, 
   CameraBundle::Ptr ncam = (cam) ? cam : loadCameraFromYaml(pnh);
 
   // Init VO
+  // Preserve the historical array default while honoring an explicit override.
+  vk::param<double>(pnh, "init_min_disparity", 25.0);
   InitializationOptions init_options = loadInitializationOptions(pnh);
   init_options.init_type = InitializerType::kArrayGeometric;
-  init_options.init_min_disparity = 25;
   DepthFilterOptions depth_filter_options = loadDepthFilterOptions(pnh);
   depth_filter_options.verbose = true;
   FrameHandlerArray::Ptr vo =

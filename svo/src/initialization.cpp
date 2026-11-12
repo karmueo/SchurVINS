@@ -470,6 +470,36 @@ InitResult AbstractInitialization::initializeArrayGeometry(
     cam_translations.push_back(cur->T_imu_cam().getPosition());
     cam_rotations.push_back(cur->T_imu_cam().getRotationMatrix());
     feature_tracking_utils::getFeatureMatches(*cur, *ref, &matches[cam_id]);
+    // A successful forward patch alignment can still be an occluded or local
+    // minimum match. The 17-point model needs a clean sample; verify that each
+    // correspondence returns to its reference pixel before fitting geometry.
+    if (!matches[cam_id].empty())
+    {
+      std::vector<cv::Point2f> current_pixels, reference_pixels;
+      for (const auto& match : matches[cam_id])
+      {
+        const auto current = cur->px_vec_.col(match.first);
+        const auto reference = ref->px_vec_.col(match.second);
+        current_pixels.emplace_back(current.x(), current.y());
+        reference_pixels.emplace_back(reference.x(), reference.y());
+      }
+      const auto expected_pixels = reference_pixels;
+      std::vector<unsigned char> status;
+      std::vector<float> errors;
+      cv::calcOpticalFlowPyrLK(cur->img(), ref->img(), current_pixels,
+          reference_pixels, status, errors, cv::Size(21, 21),
+          tracker_->options_.klt_max_level,
+          cv::TermCriteria(cv::TermCriteria::COUNT | cv::TermCriteria::EPS,
+              tracker_->options_.klt_max_iter,
+              std::sqrt(tracker_->options_.klt_min_update_squared)),
+          cv::OPTFLOW_USE_INITIAL_FLOW);
+      FeatureMatches consistent;
+      for (size_t i = 0; i < matches[cam_id].size(); ++i)
+        if (status[i] && cv::norm(reference_pixels[i] - expected_pixels[i]) <=
+                            0.5 * options_.reproj_error_thresh)
+          consistent.push_back(matches[cam_id][i]);
+      matches[cam_id] = std::move(consistent);
+    }
     for (const auto& match : matches[cam_id])
     {
       f_cur.push_back(cur->f_vec_.col(match.first));
@@ -478,21 +508,39 @@ InitResult AbstractInitialization::initializeArrayGeometry(
       cam_ids_ref.push_back(static_cast<int>(cam_id));
     }
   }
-  if (f_cur.size() < std::max<size_t>(6, options_.init_min_inliers))
+  if (f_cur.size() < std::max<size_t>(17, options_.init_min_inliers))
     return InitResult::kNoKeyframe;
+  VLOG(3) << "Array verified correspondences: " << f_cur.size();
   opengv::relative_pose::NoncentralRelativeAdapter adapter(
       f_cur, f_ref, cam_ids_cur, cam_ids_ref, cam_translations, cam_rotations);
   using Problem = opengv::sac_problems::relative_pose::NoncentralRelativePoseSacProblem;
   opengv::sac::Ransac<Problem> ransac;
-  ransac.sac_model_ = std::make_shared<Problem>(adapter, Problem::SIXPT);
+  ransac.sac_model_ = std::make_shared<Problem>(adapter, Problem::SEVENTEENPT);
   ransac.threshold_ = 1.0 - std::cos(
       frames_cur->at(0)->getAngleError(options_.reproj_error_thresh));
   ransac.max_iterations_ = 500;
   ransac.probability_ = 0.995;
   if (!ransac.computeModel() || ransac.inliers_.size() < options_.init_min_inliers)
     return InitResult::kNoKeyframe;
-  T_cur_from_ref_ = Transformation(Quaternion(Eigen::Matrix3d(ransac.model_coefficients_.leftCols(3))),
-                                  ransac.model_coefficients_.rightCols(1));
+  // The historical array model is a generalized 17-point camera model. The
+  // minimal SIXPT translation recovery in system OpenGV can select an unrelated
+  // eigenvector; refine the stable 17-point estimate using all its inliers.
+  opengv::transformation_t refined = ransac.model_coefficients_;
+  VLOG(3) << "Array initial model (" << ransac.inliers_.size() << " inliers):\n" << refined;
+  ransac.sac_model_->optimizeModelCoefficients(ransac.inliers_, ransac.model_coefficients_, refined);
+  VLOG(3) << "Array refined model:\n" << refined;
+  if (!refined.allFinite()) return InitResult::kNoKeyframe;
+  ransac.sac_model_->selectWithinDistance(refined, ransac.threshold_, ransac.inliers_);
+  if (ransac.inliers_.size() < options_.init_min_inliers) return InitResult::kNoKeyframe;
+  const Eigen::Matrix3d rotation = refined.leftCols(3);
+  // With same-camera temporal matches, pure translation has no metric scale:
+  // the known lever-arm term (R-I)(c_i-c_j) vanishes. Wait for excitation.
+  double lever_arm = 0.0;
+  for (const auto& center : cam_translations)
+    lever_arm = std::max(lever_arm, ((rotation-Eigen::Matrix3d::Identity()) *
+                         (center-cam_translations.front())).norm());
+  if (lever_arm < 1e-8) return InitResult::kNoKeyframe;
+  T_cur_from_ref_ = Transformation(Quaternion(rotation), refined.rightCols(1));
   const Transformation T_cur_world = T_cur_from_ref_ * frames_ref_->at(0)->T_imu_world();
   std::vector<Positions> points(frames_cur->size());
   size_t n_points = 0;
@@ -655,9 +703,11 @@ void triangulatePoints(
 
     const double e1 = angleError(f_cur, xyz_in_cur);
     const double e2 = angleError(f_ref, T_ref_cur * xyz_in_cur);
-    if(e1 > angle_threshold || e2 > angle_threshold ||
-       (frame_cur.cam()->getType() == Camera::Type::kPinhole &&
-           xyz_in_cur.z() < 0.0))
+    const Position xyz_in_ref = T_ref_cur * xyz_in_cur;
+    if(!xyz_in_cur.allFinite() || !xyz_in_ref.allFinite() ||
+       !std::isfinite(e1) || !std::isfinite(e2) ||
+       e1 > angle_threshold || e2 > angle_threshold ||
+       xyz_in_cur.dot(f_cur) <= 0.0 || xyz_in_ref.dot(f_ref) <= 0.0)
     {
       outliers.push_back(i);
     }

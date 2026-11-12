@@ -128,7 +128,7 @@ Rig makeRig(size_t count)
       // noncentral geometry. No stereo pair is duplicated for the array case.
       const Eigen::Vector3d centers[] = {{-.18,-.12,0},{.17,-.10,.03},
                                         {-.12,.15,-.02},{.20,.13,.01}};
-      center = centers[camera];
+      center = 3.0 * centers[camera];
       yaw = camera % 2 == 0 ? -.08 : .09;
       pitch = camera < 2 ? -.04 : .05;
     }
@@ -142,11 +142,17 @@ Rig makeRig(size_t count)
   return result;
 }
 
-svo::Transformation bodyPose(int frame)
+svo::Transformation bodyPose(int frame, bool array = false)
 {
   const double time = static_cast<double>(frame);
-  const Eigen::Matrix3d rotation = (Eigen::AngleAxisd(.006*time,Eigen::Vector3d::UnitY()) *
-      Eigen::AngleAxisd(.002*std::sin(.3*time),Eigen::Vector3d::UnitZ())).toRotationMatrix();
+  // Same-camera temporal generalized geometry needs rotational lever-arm
+  // excitation for metric scale. Keep the original mono/stereo trajectory.
+  const Eigen::Matrix3d rotation = array ?
+      (Eigen::AngleAxisd(.18*std::sin(.2*time),Eigen::Vector3d::UnitY()) *
+       Eigen::AngleAxisd(.15*std::sin(.15*time),Eigen::Vector3d::UnitX()) *
+       Eigen::AngleAxisd(.08*std::sin(.1*time),Eigen::Vector3d::UnitZ())).toRotationMatrix() :
+      (Eigen::AngleAxisd(.006*time,Eigen::Vector3d::UnitY()) *
+       Eigen::AngleAxisd(.002*std::sin(.3*time),Eigen::Vector3d::UnitZ())).toRotationMatrix();
   return svo::Transformation(svo::Quaternion(rotation),
       Eigen::Vector3d(.045*time,.008*std::sin(.3*time),.002*time));
 }
@@ -175,12 +181,12 @@ void exportArrayFixture(const Rig& rig, const TexturedScene& scene)
       const auto directory = "cam"+std::to_string(camera);
       std::filesystem::create_directories(root/"data"/directory);
       const auto name = directory+"/"+std::to_string(stamp)+".png";
-      if (!cv::imwrite((root/"data"/name).string(),scene.render(bodyPose(frame)*rig.body_camera[camera])))
+      if (!cv::imwrite((root/"data"/name).string(),scene.render(bodyPose(frame,true)*rig.body_camera[camera])))
         throw std::runtime_error("Cannot export array fixture image: " + name);
       manifest << ' ' << name;
     }
     manifest << '\n';
-    const auto pose = bodyPose(frame);
+    const auto pose = bodyPose(frame,true);
     const auto position = pose.getPosition();
     const auto quaternion = pose.getRotation().toImplementation();
     groundtruth << stamp*1e-9 << ' ' << position.x() << ' ' << position.y() << ' ' << position.z()
@@ -244,14 +250,14 @@ void exportArrayFixture(const Rig& rig, const TexturedScene& scene)
     init_min_features: 60
     init_min_tracked: 40
     init_min_inliers: 30
-    init_min_disparity: 25.0
+    init_min_disparity: 55.0
     init_min_features_factor: 2.5
 )";
   std::ofstream description(root/"FORMAT.txt");
   description << "24 frames, 50ms spacing. data/images.txt: timestamp_ns + four independent image paths.\n"
               << "calib.yaml contains metric camera-to-body T_B_C. params.yaml selects the actual array benchmark.\n"
               << "No IMU, pose prior, or prebuilt map is supplied. trajectory_gt_imu.txt is exact synthetic reference.\n"
-              << "The offline factory keeps its historical 25px initialization disparity; the direct fixture uses 12px.\n";
+              << "Both array fixtures use 55px disparity and multi-axis rotation to excite metric scale.\n";
 }
 
 enum class Pipeline { Mono, Stereo, Array };
@@ -293,7 +299,7 @@ void exercisePipeline(Pipeline pipeline)
   initialization.init_min_features = pipeline == Pipeline::Stereo ? 30 : 60;
   initialization.init_min_tracked = 40;
   initialization.init_min_inliers = 30;
-  initialization.init_min_disparity = 12;
+  initialization.init_min_disparity = pipeline == Pipeline::Array ? 55 : 12;
   std::unique_ptr<svo::FrameHandlerBase> handler;
   if (pipeline == Pipeline::Mono)
     handler = std::make_unique<svo::FrameHandlerMono>(base,depth,detector,initialization,reprojector,tracker,rig.cameras);
@@ -312,7 +318,7 @@ void exercisePipeline(Pipeline pipeline)
     SCOPED_TRACE(::testing::Message() << "camera_count=" << count << ", input_frame=" << frame);
     std::vector<cv::Mat> images;
     for (size_t camera = 0; camera < count; ++camera)
-      images.push_back(scene.render(bodyPose(frame)*rig.body_camera[camera]));
+      images.push_back(scene.render(bodyPose(frame,pipeline == Pipeline::Array)*rig.body_camera[camera]));
     if (frame == 0 && count > 1)
       for (size_t camera = 1; camera < count; ++camera)
         EXPECT_GT(cv::norm(images.front(),images[camera],cv::NORM_L1), 10000.0);
@@ -336,7 +342,7 @@ void exercisePipeline(Pipeline pipeline)
   EXPECT_EQ(handler->stage(), svo::Stage::kTracking);
   EXPECT_GE(maximum_keyframes, count == 4 ? 8u : count);
   const Eigen::Vector3d estimated = last_position-first_position;
-  const Eigen::Vector3d expected = bodyPose(kFrames-1).getPosition()-bodyPose(first_tracking_frame).getPosition();
+  const Eigen::Vector3d expected = bodyPose(kFrames-1,pipeline == Pipeline::Array).getPosition()-bodyPose(first_tracking_frame,pipeline == Pipeline::Array).getPosition();
   ASSERT_GT(estimated.norm(), .02) << "A stationary identity output is not successful tracking";
   EXPECT_GT(estimated.normalized().dot(expected.normalized()), .7);
   if (pipeline != Pipeline::Mono)
