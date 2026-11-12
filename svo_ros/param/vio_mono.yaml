@@ -78,7 +78,7 @@
     alpha: 0.8
     beta: 0.8
     frames_to_ignore: 20
-    scale_retrieval_approach: -1
+    scale_retrieval_approach: None
     bow_thresh: 0.65
     gv_thresh: 40.0
     min_num_3d: 10

@@ -18,6 +18,7 @@ sudo apt install ros-jazzy-desktop ros-dev-tools python3-colcon-common-extension
   python3-numpy python3-scipy python3-matplotlib python3-yaml \
   python3-psutil python3-colorama python3-pytest xvfb
 source /opt/ros/jazzy/setup.bash
+export PATH=/usr/bin:/bin:$PATH
 ```
 
 Use distribution Eigen 3.4, OpenCV 4.6, Ceres 2.2, yaml-cpp 0.8 and Jazzy GTSAM 4.2. Do not mix a user OpenCV 4.13 installation with system cv_bridge. The build pins `OpenCV_DIR` and rejects newer OpenCV versions; use `/usr/bin/python3` rather than a Conda interpreter.
@@ -26,8 +27,8 @@ From the repository root prepare source dependencies and official vocabulary res
 
 ```bash
 export SCHURVINS_DEPENDENCY_DIR="$HOME/.cache/schurvins/dependencies"
-python3 scripts/prepare_dependencies.py "$SCHURVINS_DEPENDENCY_DIR"
-python3 scripts/prepare_resources.py "$HOME/.cache/schurvins/resources"
+/usr/bin/python3 scripts/prepare_dependencies.py "$SCHURVINS_DEPENDENCY_DIR"
+/usr/bin/python3 scripts/prepare_resources.py "$HOME/.cache/schurvins/resources"
 ```
 
 The vendor wrappers require clean source trees at these locked commits:
@@ -46,6 +47,7 @@ Place the checkout at `~/schurvins_ws/src/SchurVINS`. From `~/schurvins_ws`, in 
 
 ```bash
 source /opt/ros/jazzy/setup.bash
+export PATH=/usr/bin:/bin:$PATH
 export SCHURVINS_DEPENDENCY_DIR="$HOME/.cache/schurvins/dependencies"
 colcon --log-base log-default build --base-paths src/SchurVINS \
   --build-base build-default --install-base install-default \
@@ -79,7 +81,7 @@ ros2 launch svo_ros euroc_vio_stereo.launch.py output_dir:="$HOME/schurvins-resu
 ros2 bag play /absolute/path/to/ros2_euroc --clock --rate 0.25
 ```
 
-The EuRoC example consumes `/cam0/image_raw`, `/cam1/image_raw` and `/imu0`. Generic `svo.launch.py` accepts `pipeline` (`stereo`, `mono`, `array`), `params`, `calib_file`, `imu_topic`, `use_imu`, `use_sim_time`, and `output_dir`. Parameters and calibration paths may be absolute external files. Inspect launch arguments with `ros2 launch svo_ros svo.launch.py --show-args`.
+The EuRoC example consumes `/cam0/image_raw`, `/cam1/image_raw` and `/imu0`. Generic `svo.launch.py` accepts `pipeline` (`stereo`, `mono`, `array`), `params`, `calib_file`, `imu_topic`, `use_imu`, `use_sim_time`, `vocabulary_dir`, and `output_dir`. Monocular configurations with `runlc: true` require `vocabulary_dir:=/absolute/locked/vocabularies`. Parameters and calibration paths may be absolute external files. Inspect launch arguments with `ros2 launch svo_ros svo.launch.py --show-args`.
 
 Traditional launch entries are `euroc_vio_mono.launch.py`, `euroc_visual_mono.launch.py`, `euroc_visual_stereo.launch.py`, and `array.launch.py` (four-camera calibration required). Four-camera datasets use the offline `svo_benchmark` entry and an image index with four paths; see [benchmarking](../svo_benchmarking/README.md). The global example is `euroc_global_map_mono.launch.py output_dir:=... vocabulary_dir:=...` under a traditional + global map build.
 
@@ -120,7 +122,7 @@ A reset reconstructs estimation state and creates a new output run. Paused playb
 The repository's automatic acceptance runner is the preferred reproducible entry. From any directory, source the selected install and invoke its absolute source path. `--output` must name a new directory:
 
 ```bash
-python3 ~/schurvins_ws/src/SchurVINS/scripts/accept_ego.py \
+/usr/bin/python3 ~/schurvins_ws/src/SchurVINS/scripts/accept_ego.py \
   --bag /data/scl_data/slam/stereo_live_bags/EGO/800hz/job_002.mcap \
   --calibration /data/scl_data/slam/stereo_live_bags/EGO/800hz/calib.yaml \
   --output "$HOME/schurvins-results/ego-acceptance-quarter-speed" --rate 0.25 \
@@ -137,7 +139,7 @@ ros2 launch svo_ros ego.launch.py \
   output_dir:="$HOME/schurvins-results/ego-quarter-speed" rviz:=true
 ```
 
-After the adapter and estimator subscriptions are present, replay in another sourced terminal:
+For complete-count acceptance use the automatic command above. For manual replay, start paused and wait for actual DDS endpoint matching before resuming in another sourced terminal:
 
 For manual playback, create a reliable QoS override to match the input subscribers:
 
@@ -160,8 +162,14 @@ YAML
 ros2 topic info /stereo/image_raw --verbose
 ros2 topic info /imu --verbose
 ros2 bag play /data/scl_data/slam/stereo_live_bags/EGO/800hz/job_002.mcap \
-  --clock --rate 0.25 --qos-profile-overrides-path /tmp/ego-playback-qos.yaml \
+  --clock --rate 0.25 --start-paused --qos-profile-overrides-path /tmp/ego-playback-qos.yaml \
   --topics /stereo/image_raw /imu
+```
+
+While the player is paused, inspect `ros2 topic echo /ego/runtime_status --once` until all five `matched_*` values are positive. This checks DDS matches; merely seeing subscriptions in the ROS graph is insufficient. Then resume:
+
+```bash
+ros2 service call /rosbag2_player/resume rosbag2_interfaces/srv/Resume '{}'
 ```
 
 The JPEG input is 3840×1080 and splits into full-size 1920×1080 grayscale views. Both views retain the source timestamp. The adapter subtracts 0.007 seconds from IMU timestamps and subtracts fixed biases once (gyro deg/s → rad/s); the internal initial biases are zero and estimate the remaining bias. The generated configuration uses 800 Hz nominal IMU frequency, actual timestamp integration, unchanged source noise values, `delay_imu_cam=0`, millimetres → metres, inverse source `T_cam_imu` as `T_B_C`, and pinhole + equidistant distortion. No rectification, cropping or scaling is applied.
@@ -169,7 +177,7 @@ The JPEG input is 3840×1080 and splits into full-size 1920×1080 grayscale view
 The launch creates `output_dir/ego_calibration_*/calibration.yaml`. For a separate conversion:
 
 ```bash
-python3 "$(ros2 pkg prefix --share svo_ros)/scripts/ego_calibration.py" \
+/usr/bin/python3 "$(ros2 pkg prefix --share svo_ros)/scripts/ego_calibration.py" \
   /data/scl_data/slam/stereo_live_bags/EGO/800hz/calib.yaml /tmp/ego-calibration.yaml
 ```
 

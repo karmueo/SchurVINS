@@ -14,12 +14,14 @@ def generate_launch_description():
         DeclareLaunchArgument('pipeline', default_value='stereo'),
         DeclareLaunchArgument('params', default_value=str(share / 'param' / 'vio_stereo.yaml')),
         DeclareLaunchArgument('calib_file', default_value=str(share / 'param' / 'calib' / 'euroc_stereo.yaml')),
+        DeclareLaunchArgument('vocabulary_dir', default_value='', description='External locked vocabulary directory when runlc is enabled'),
         DeclareLaunchArgument('imu_topic', default_value='/imu0'),
         DeclareLaunchArgument('use_imu', default_value='true'),
         DeclareLaunchArgument('output_dir', default_value='/tmp/schurvins-results'),
         DeclareLaunchArgument('use_sim_time', default_value='true'),
         Node(package='svo_ros', executable='svo_node', name='svo', output='screen', parameters=[
             LaunchConfiguration('params'), {
+                'voc_path': LaunchConfiguration('vocabulary_dir'),
                 'pipeline': LaunchConfiguration('pipeline'), 'calib_file': LaunchConfiguration('calib_file'),
                 'imu_topic': LaunchConfiguration('imu_topic'), 'output_dir': LaunchConfiguration('output_dir'),
                 'use_imu': ParameterValue(LaunchConfiguration('use_imu'), value_type=bool),

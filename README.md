@@ -24,12 +24,13 @@ After installing Jazzy and the dependencies documented in that guide:
 
 ```bash
 source /opt/ros/jazzy/setup.bash
+export PATH=/usr/bin:/bin:$PATH
 mkdir -p ~/schurvins_ws/src
 cd ~/schurvins_ws/src
 git clone https://github.com/bytedance/SchurVINS.git
 export SCHURVINS_DEPENDENCY_DIR="$HOME/.cache/schurvins/dependencies"
-python3 SchurVINS/scripts/prepare_dependencies.py "$SCHURVINS_DEPENDENCY_DIR"
-python3 SchurVINS/scripts/prepare_resources.py "$HOME/.cache/schurvins/resources"
+/usr/bin/python3 SchurVINS/scripts/prepare_dependencies.py "$SCHURVINS_DEPENDENCY_DIR"
+/usr/bin/python3 SchurVINS/scripts/prepare_resources.py "$HOME/.cache/schurvins/resources"
 cd ~/schurvins_ws
 colcon --log-base log-default build --base-paths src/SchurVINS \
   --build-base build-default --install-base install-default \
@@ -46,7 +47,7 @@ The default estimator is stereo SchurVINS with IMU. Build the separate tradition
 The automated acceptance entry waits for DDS subscriptions, runs playback, checks complete counts, sends `q` after image processing drains, and evaluates the resulting reference trajectory. Use a **new** output path for each run:
 
 ```bash
-python3 ~/schurvins_ws/src/SchurVINS/scripts/accept_ego.py \
+/usr/bin/python3 ~/schurvins_ws/src/SchurVINS/scripts/accept_ego.py \
   --bag /data/scl_data/slam/stereo_live_bags/EGO/800hz/job_002.mcap \
   --calibration /data/scl_data/slam/stereo_live_bags/EGO/800hz/calib.yaml \
   --output "$HOME/schurvins-results/ego-acceptance-quarter-speed" --rate 0.25 \

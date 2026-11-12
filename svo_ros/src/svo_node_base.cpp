@@ -140,9 +140,13 @@ void SvoNodeBase::imu(Imu msg)
 std::string SvoNodeBase::statusLocked() const
 {
   const auto& c = scheduler_->counters;
+  size_t matched_inputs = 0;
+  for (const auto& input : images_) if (input->get_publisher_count()) ++matched_inputs;
+  if (imu_ && imu_->get_publisher_count()) ++matched_inputs;
   std::ostringstream out;
   out << "{\"image_messages\":" << c.image_messages << ",\"image_groups\":" << c.image_groups
       << ",\"imu_received\":" << c.imu_received << ",\"imu_consumed\":" << c.imu_consumed
+      << ",\"matched_inputs\":" << matched_inputs
       << ",\"processed\":" << processed_ << ",\"poses\":" << poses_
       << ",\"leading_skipped\":" << c.leading_skipped << ",\"overflow\":" << c.overflow
       << ",\"time_jumps\":" << c.time_jumps << ",\"duplicates\":" << c.duplicates
