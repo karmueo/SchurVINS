@@ -1,5 +1,7 @@
 #pragma once
 
+#include <gtsam/geometry/Point3.h>
+
 #include <utility> // std::pair
 #include <boost/shared_ptr.hpp>
 
@@ -7,7 +9,7 @@
 namespace gtsam {
 class Values;
 class Pose3;
-class Point3;
+
 class Cal3_S2;
 template<typename KEY, typename VALUE> class FastMap;
 template<class CALIBRATION> class SmartProjectionPoseFactor;

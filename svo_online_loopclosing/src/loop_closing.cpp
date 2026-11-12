@@ -12,6 +12,7 @@
 #include "svo/online_loopclosing/loop_closing.h"
 
 #include <unistd.h>
+#include <filesystem>
 
 #include <glog/logging.h>
 
@@ -38,9 +39,8 @@ LoopClosing::LoopClosing(const LoopClosureOptions& loopclosure_options,
                          const CameraBundle::Ptr& cams_)
   : options_(loopclosure_options)
 {
-  std::stringstream path;
-  path << options_.voc_path << options_.voc_name;
-  std::string voc_path_full = path.str();
+  const std::string voc_path_full =
+      (std::filesystem::path(options_.voc_path) / options_.voc_name).string();
   voc_ = loadVoc(voc_path_full);
   Eigen::VectorXd intrinsics =
       cams_->getCameraShared(0)->getIntrinsicParameters();
@@ -65,8 +65,8 @@ LoopClosing::LoopClosing(const LoopClosureOptions& loopclosure_options,
 
   CHECK_GE(options_.ignored_past_frames, 0);
 
-  int sys =
-      system(("exec rm -r " + options_.image_log_base_path + "*").c_str());
+  if (options_.enable_image_logging)
+    std::filesystem::create_directories(options_.image_log_base_path);
 }
 
 LoopClosing::~LoopClosing()

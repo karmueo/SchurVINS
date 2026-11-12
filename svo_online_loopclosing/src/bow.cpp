@@ -6,6 +6,8 @@
  */
 
 #include "svo/online_loopclosing/bow.h"
+#include <filesystem>
+#include <stdexcept>
 
 using namespace DBoW2;
 
@@ -122,7 +124,11 @@ OrbVocabulary createVoc(const std::vector<std::vector<cv::Mat> >& features,
 
 OrbVocabulary loadVoc(const std::string& path_to_vocabulary)
 {
+  if (!std::filesystem::is_regular_file(path_to_vocabulary))
+    throw std::runtime_error("Loop closure vocabulary is missing: " + path_to_vocabulary);
   OrbVocabulary voc(path_to_vocabulary);
+  if (voc.empty())
+    throw std::runtime_error("Loop closure vocabulary is empty or invalid: " + path_to_vocabulary);
   return voc;
 }
 

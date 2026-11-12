@@ -174,10 +174,10 @@ public:
    * @param[out]  publisher Publisher handle, shared with frontend for
    *              benchmarking purposes.
    */
-  void makePublisher(const ros::NodeHandle& nh_private,
+  void makePublisher(rclcpp::Node& node,
                      std::shared_ptr<CeresBackendPublisher>& publisher)
   {
-    publisher_.reset(new CeresBackendPublisher(nh_private, backend_.getMap()));
+    publisher_.reset(new CeresBackendPublisher(node, backend_.getMap()));
     publisher = publisher_;
   }
 

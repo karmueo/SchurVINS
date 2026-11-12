@@ -70,30 +70,30 @@ inline Vector CameraBearingExtrinsicsFactor<Pose3, Point3>::evaluateError(
     boost::optional<Matrix&> H1, boost::optional<Matrix&> H2,
     boost::optional<Matrix&> H3) const
 {
-  if (H1)
+  if (H1 || H2 || H3)
   {
     gtsam::Matrix dTwc_dTwb;
     gtsam::Matrix dTwc_dTbc;
     Pose3 T_w_c = T_w_b.compose(T_b_c, dTwc_dTwb, dTwc_dTbc);
     gtsam::Matrix dpc_dpw;
     gtsam::Matrix dpc_dTwc;
-    Point3 p_c = T_w_c.transform_to(p_w, dpc_dTwc, dpc_dpw);
+    Point3 p_c = T_w_c.transformTo(p_w, dpc_dTwc, dpc_dpw);
 
     gtsam::Matrix df_dpc;
-    Point3 f = p_c.normalized(df_dpc);
+    Point3 f = gtsam::normalize(p_c, df_dpc);
     Point3 e_f = f - measured_;
 
     gtsam::Matrix df_dTwc = df_dpc * dpc_dTwc;
-    *H1 = df_dTwc * dTwc_dTwb;
-    *H2 = df_dTwc * dTwc_dTbc;
-    *H3 = df_dpc * dpc_dpw;
+    if (H1) *H1 = df_dTwc * dTwc_dTwb;
+    if (H2) *H2 = df_dTwc * dTwc_dTbc;
+    if (H3) *H3 = df_dpc * dpc_dpw;
 
     return Vector3(e_f);
   }
   else
   {
     Pose3 T_w_cam = T_w_b.compose(T_b_c);
-    Point3 p_c = T_w_cam.transform_to(p_w);
+    Point3 p_c = T_w_cam.transformTo(p_w);
     Point3 f = p_c.normalized();
     return Vector3(f - measured_);
   }

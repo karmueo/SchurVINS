@@ -11,7 +11,7 @@
  */
 
 #include <fstream>
-#include <ros/package.h>
+#include <filesystem>
 
 #include "svo/online_loopclosing/bow.h"
 
@@ -21,9 +21,9 @@ using namespace DBoW2;
 
 int main(int argc, char* argv[])
 {
-  if (argc < 2)
+  if (argc < 4)
   {
-    std::cerr << "Provide Image Directory Path and Vocabulary name"
+    std::cerr << "Usage: createvoc IMAGE_DIRECTORY VOCABULARY_NAME OUTPUT_DIRECTORY"
               << std::endl;
     return 1;
   }
@@ -33,10 +33,8 @@ int main(int argc, char* argv[])
   const int L = 4;
   const WeightingType weight = TF_IDF;
   const ScoringType score = BHATTACHARYYA;
-  stringstream voc_save_path_;
-  voc_save_path_ << ros::package::getPath("svo_online_loopclosing") << "/vocabu"
-                                                                       "laries";
-  string voc_save_path = voc_save_path_.str();
+  const string voc_save_path(argv[3]);
+  std::filesystem::create_directories(voc_save_path);
 
   string voc_name = std::string(argv[2]);
   vector<vector<cv::Mat>> features;

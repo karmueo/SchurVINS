@@ -70,27 +70,27 @@ inline Vector CameraBearingFactor<Pose3, Point3>::evaluateError(
     const Pose3& T_w_body, const Point3& p_w, boost::optional<Matrix&> H1,
     boost::optional<Matrix&> H2) const
 {
-  if (H1)
+  if (H1 || H2)
   {
     gtsam::Matrix dTwc_dTwb;
     Pose3 T_w_cam = T_w_body.compose(T_body_cam_, dTwc_dTwb);
     gtsam::Matrix dpc_dpw;
     gtsam::Matrix dpc_dTwc;
-    Point3 p_c = T_w_cam.transform_to(p_w, dpc_dTwc, dpc_dpw);
+    Point3 p_c = T_w_cam.transformTo(p_w, dpc_dTwc, dpc_dpw);
 
     gtsam::Matrix df_dpc;
-    Point3 f = p_c.normalized(df_dpc);
+    Point3 f = gtsam::normalize(p_c, df_dpc);
     Point3 e_f = f - measured_;
 
-    *H1 = df_dpc * dpc_dTwc * dTwc_dTwb;
-    *H2 = df_dpc * dpc_dpw;
+    if (H1) *H1 = df_dpc * dpc_dTwc * dTwc_dTwb;
+    if (H2) *H2 = df_dpc * dpc_dpw;
 
     return Vector3(e_f);
   }
   else
   {
     Pose3 T_w_cam = T_w_body.compose(T_body_cam_);
-    Point3 p_c = T_w_cam.transform_to(p_w);
+    Point3 p_c = T_w_cam.transformTo(p_w);
     Point3 f = p_c.normalized();
     return Vector3(f - measured_);
   }
