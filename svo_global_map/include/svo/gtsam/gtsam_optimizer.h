@@ -67,7 +67,8 @@ public:
   std::mutex optimizer_cond_var_mut_;
   std::condition_variable optimizer_condition_var_;
   std::shared_ptr<std::thread> thread_;
-  std::atomic<bool> quit_thread_;
+  std::atomic<bool> quit_thread_{false};
+  bool optimization_pending_ = false;  // protected by optimizer_cond_var_mut_
   void startThread();
   void quitThread();
 

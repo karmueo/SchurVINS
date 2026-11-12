@@ -90,7 +90,11 @@ void GTSAMOptimizer::optimize()
   }
   else
   {
-    optimizer_condition_var_.notify_one();  // notify the optimizer thread
+    {
+      std::lock_guard<std::mutex> lock(optimizer_cond_var_mut_);
+      optimization_pending_ = true;
+    }
+    optimizer_condition_var_.notify_one();
   }
 }
 
@@ -228,8 +232,12 @@ bool GTSAMOptimizer::optimizeImpl()
 
 void GTSAMOptimizer::startThread()
 {
-  VLOG(3) << "BA: Started bundle adjustment thread";
-  quit_thread_ = false;
+  CHECK(!thread_) << "Optimizer thread is already running.";
+  {
+    std::lock_guard<std::mutex> lock(optimizer_cond_var_mut_);
+    quit_thread_ = false;
+    optimization_pending_ = true;
+  }
   thread_ = std::make_shared<std::thread>(&GTSAMOptimizer::threadLoop, this);
 }
 
@@ -237,25 +245,35 @@ void GTSAMOptimizer::quitThread()
 {
   if (thread_)
   {
-    quit_thread_ = true;
+    {
+      std::lock_guard<std::mutex> lock(optimizer_cond_var_mut_);
+      quit_thread_ = true;
+    }
     optimizer_condition_var_.notify_all();
     thread_->join();
+    thread_.reset();
   }
-  thread_ = nullptr;
 }
 
 void GTSAMOptimizer::threadLoop()
 {
-  while (!quit_thread_)
+  for (;;)
   {
-    // optimize returns true when we have finished optimizing
-    // it returns false, when we have to run another iteration
-    if (optimizeImpl())
     {
-      VLOG(10) << "Optimizer thread waiting ...";
       std::unique_lock<std::mutex> lock(optimizer_cond_var_mut_);
-      optimizer_condition_var_.wait(lock);
-      VLOG(10) << "Optimizer thread finished waiting.";
+      optimizer_condition_var_.wait(lock, [this] {
+        return quit_thread_.load() || optimization_pending_;
+      });
+      if (quit_thread_)
+        return;
+      optimization_pending_ = false;
+    }
+    // Updates that arrive during optimization leave pending set, so neither
+    // work notifications nor shutdown can be lost before the next wait.
+    if (!optimizeImpl())
+    {
+      std::lock_guard<std::mutex> lock(optimizer_cond_var_mut_);
+      optimization_pending_ = true;
     }
   }
 }

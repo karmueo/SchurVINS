@@ -1,4 +1,6 @@
 #include <gtest/gtest.h>
+#include <svo/gtsam/gtsam_optimizer.h>
+#include <svo/gtsam/graph_manager.h>
 #include <gtsam/base/numericalDerivative.h>
 #include <svo/gtsam/camera_bearing_factor.h>
 #include <svo/gtsam/camera_bearing_extrinsics_factor.h>
@@ -48,4 +50,18 @@ TEST(BearingFactors, ExtrinsicJacobianAndIndependentRequests)
   factor.evaluateError(pose, extrinsic, point, boost::none, boost::none, landmark_only);
   EXPECT_LT((extrinsic_only - He).norm(), 1e-12);
   EXPECT_LT((landmark_only - Hl).norm(), 1e-12);
+}
+
+TEST(GlobalMapOptimizer, StartsAndJoinsRepeatedlyWithoutLostShutdown)
+{
+  auto graph = std::make_shared<svo::GraphManager>(svo::GraphManagerOptions());
+  svo::GTSAMOptimizer optimizer(svo::GTSAMOptimizerOptions(), graph);
+  optimizer.initialize();
+  for (int i = 0; i < 20; ++i)
+  {
+    optimizer.startThread();
+    optimizer.optimize();
+    optimizer.quitThread();
+    EXPECT_FALSE(optimizer.thread_);
+  }
 }
