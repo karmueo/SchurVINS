@@ -22,9 +22,8 @@
 #include <sensor_msgs/msg/image.hpp>
 #include <sensor_msgs/msg/camera_info.hpp>
 #include <nav_msgs/msg/odometry.hpp>
-#include <std_msgs/msg/color_r_g_b_a.hpp>
+#include <std_msgs/msg/color_rgba.hpp>
 #include <tf2_ros/transform_broadcaster.h>
-#include <image_transport/image_transport.h>
 #include <sensor_msgs/msg/point_cloud2.hpp>
 #include <svo_msgs/msg/info.hpp>
 #include <svo_msgs/msg/dense_input_with_features.hpp>

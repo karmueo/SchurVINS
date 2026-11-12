@@ -55,9 +55,15 @@ public:
     imu_.emplace_back(stamp, std::move(sample));
     return true;
   }
-  bool takeImu(Imu& result)
+  bool canTakeImu(bool initialization_or_final_drain = false) const
   {
     if (imu_.empty()) return false;
+    if (initialization_or_final_drain) return true;
+    return !images_.empty() && covered_ < images_.begin()->first;
+  }
+  bool takeImu(Imu& result, bool initialization_or_final_drain = false)
+  {
+    if (!canTakeImu(initialization_or_final_drain)) return false;
     covered_ = imu_.front().first;
     result = std::move(imu_.front().second);
     imu_.pop_front();
@@ -81,6 +87,8 @@ public:
     if (leading) ++counters.leading_skipped;
     return true;
   }
+  int64_t nextStamp() const { return images_.begin()->first; }
+  bool leadingNext() const { return use_imu_ && first_imu_ >= 0 && nextStamp() < first_imu_; }
   size_t pendingImages() const { return images_.size(); }
   size_t pendingImu() const { return imu_.size(); }
   bool hasImu() const { return !imu_.empty(); }

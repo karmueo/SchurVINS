@@ -27,6 +27,7 @@ private:
   void worker();
   void createEstimator();
   void closeRun();
+  void saveConfiguration();
   void publishStatus();
   std::string statusLocked() const;
   svo::PipelineType type_;
@@ -43,6 +44,9 @@ private:
   std::deque<char> commands_;
   std::thread worker_;
   bool quit_ = false, idle_ = false, failed_ = false, use_imu_ = true;
+  bool draining_ = false, inflight_ = false;
+  double initialization_seconds_ = -1.0;
+  int64_t first_processed_stamp_ = -1;
   size_t cameras_ = 2;
   uint64_t processed_ = 0, poses_ = 0, resets_ = 0, tracking_lost_ = 0;
   int previous_stage_ = -1;

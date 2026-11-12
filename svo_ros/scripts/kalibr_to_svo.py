@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python3
 
 import yaml
 import sys
@@ -30,7 +30,7 @@ if args.imu is None:
 
 # cameras
 with open(args.kalibr, 'r') as f:
-    K = yaml.load(f)
+    K = yaml.safe_load(f)
 cams = []
 for c in K:
     cam = UnsortableOrderedDict()
@@ -73,7 +73,7 @@ S['label'] = args.kalibr
 # IMU
 if has_imu:
     with open(args.imu, 'r') as f:
-        I = yaml.load(f)
+        I = yaml.safe_load(f)
     Sip = UnsortableOrderedDict()
     Sip['imu_params'] = UnsortableOrderedDict()
     Sip['imu_params']['delay_imu_cam'] = 0.0

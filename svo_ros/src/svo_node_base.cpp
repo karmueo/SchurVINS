@@ -13,6 +13,7 @@
 #include <algorithm>
 #include <cmath>
 #include <sys/resource.h>
+#include <yaml-cpp/yaml.h>
 
 namespace svo_ros {
 SvoNodeBase::SvoNodeBase(const rclcpp::NodeOptions& options) : Node("svo", options)
@@ -56,11 +57,12 @@ SvoNodeBase::SvoNodeBase(const rclcpp::NodeOptions& options) : Node("svo", optio
     }, control_options);
   status_ = create_publisher<std_msgs::msg::String>("/svo/runtime_status", rclcpp::QoS(1).transient_local());
   status_timer_ = create_wall_timer(std::chrono::milliseconds(500), [this] { publishStatus(); });
+  saveConfiguration();
   worker_ = std::thread(&SvoNodeBase::worker, this);
 }
 SvoNodeBase::~SvoNodeBase()
 {
-  { std::lock_guard<std::mutex> lock(mutex_); quit_ = true; }
+  { std::lock_guard<std::mutex> lock(mutex_); draining_ = true; idle_ = false; }
   changed_.notify_all();
   if (worker_.joinable()) worker_.join();
 }
@@ -78,19 +80,32 @@ void SvoNodeBase::createEstimator()
   frames_.open(run_dir_ + "/frames.csv");
   if (!frames_) throw std::runtime_error("Cannot open frame statistics");
   frames_ << "timestamp_ns,status,stage,processing_ms,pose_available\n";
-  std::ofstream config(run_dir_ + "/effective_config.yaml");
-  config << get_fully_qualified_name() << ":\n  ros__parameters:\n";
-  for (const auto& name : list_parameters({}, 100).names)
-    config << "    " << name << ": " << get_parameter(name).value_to_string() << '\n';
-  config << "    effective_run_dir: " << run_dir_ << '\n';
   processed_ = poses_ = tracking_lost_ = 0;
+  initialization_seconds_ = -1.0; first_processed_stamp_ = -1;
   previous_stage_ = -1; durations_ms_.clear(); start_ = std::chrono::steady_clock::now();
+}
+void SvoNodeBase::saveConfiguration()
+{
+  YAML::Node root;
+  auto parameters = root[get_fully_qualified_name()]["ros__parameters"];
+  for (const auto& name : list_parameters({}, 100).names)
+  {
+    const auto parameter = get_parameter(name);
+    if (parameter.get_type() == rclcpp::ParameterType::PARAMETER_STRING)
+      parameters[name] = parameter.as_string();
+    else parameters[name] = YAML::Load(parameter.value_to_string());
+  }
+  parameters["trace_dir"] = run_dir_;
+  std::ofstream config(run_dir_ + "/effective_config.yaml");
+  if (!config) throw std::runtime_error("Cannot open effective configuration");
+  config << root;
+
 }
 void SvoNodeBase::image(size_t camera, Image msg)
 {
   if (!msg || msg->width == 0 || msg->height == 0 || msg->data.empty()) return;
   std::lock_guard<std::mutex> lock(mutex_);
-  if (quit_ || failed_) return;
+  if (quit_ || failed_ || draining_) return;
   const auto stamp = rclcpp::Time(msg->header.stamp).nanoseconds();
   scheduler_->image(camera, stamp, std::move(msg));
   changed_.notify_one();
@@ -101,7 +116,7 @@ void SvoNodeBase::imu(Imu msg)
   const auto& a = msg->linear_acceleration; const auto& w = msg->angular_velocity;
   if (!std::isfinite(a.x+a.y+a.z+w.x+w.y+w.z)) return;
   std::lock_guard<std::mutex> lock(mutex_);
-  if (quit_ || failed_) return;
+  if (quit_ || failed_ || draining_) return;
   const auto stamp = rclcpp::Time(msg->header.stamp).nanoseconds();
   scheduler_->imu(stamp, std::move(msg));
   changed_.notify_one();
@@ -116,6 +131,9 @@ std::string SvoNodeBase::statusLocked() const
       << ",\"leading_skipped\":" << c.leading_skipped << ",\"overflow\":" << c.overflow
       << ",\"time_jumps\":" << c.time_jumps << ",\"duplicates\":" << c.duplicates
       << ",\"pending_images\":" << scheduler_->pendingImages() << ",\"pending_imu\":" << scheduler_->pendingImu()
+      << ",\"awaiting_images\":" << (scheduler_->pendingImages() == 0 && scheduler_->pendingImu() != 0 ? "true" : "false")
+      << ",\"inflight\":" << (inflight_ ? "true" : "false")
+      << ",\"initialization_seconds\":" << initialization_seconds_
       << ",\"resets\":" << resets_ << ",\"tracking_lost\":" << tracking_lost_
       << ",\"stopped\":" << (quit_ || failed_ ? "true" : "false")
       << ",\"failed\":" << (failed_ ? "true" : "false") << ",\"error\":\"" << error_
@@ -143,11 +161,12 @@ void SvoNodeBase::closeRun()
 void SvoNodeBase::worker()
 {
   std::unique_lock<std::mutex> lock(mutex_);
+  bool waiting_for_prior = false;
   try
   {
     while (!quit_)
     {
-      changed_.wait(lock, [this] { return quit_ || scheduler_->stopped() || !commands_.empty() || scheduler_->hasImu() || (!idle_ && scheduler_->ready()); });
+      changed_.wait(lock, [this, &waiting_for_prior] { return quit_ || draining_ || scheduler_->stopped() || !commands_.empty() || scheduler_->canTakeImu(waiting_for_prior || (draining_ && scheduler_->pendingImages() == 0)) || (!idle_ && !waiting_for_prior && scheduler_->ready()); });
       if (quit_) break;
       if (scheduler_->stopped())
       {
@@ -158,55 +177,76 @@ void SvoNodeBase::worker()
       if (!commands_.empty())
       {
         const char command = commands_.front(); commands_.pop_front();
-        if (command == 'q') { quit_ = true; break; }
+        if (command == 'q') { draining_ = true; idle_ = false; continue; }
         if (command == 'r')
         {
-          closeRun(); frames_.close(); interface_.reset(); ++resets_; createEstimator(); idle_ = true;
+          closeRun(); frames_.close(); interface_.reset(); ++resets_; createEstimator(); saveConfiguration(); waiting_for_prior = false; idle_ = true;
         }
         else if (command == 's') { interface_->svo_->start(); idle_ = false; }
         else if (command == 'c' || command == 'C') interface_->svo_->setCompensation(command == 'c');
         continue;
       }
+      if (draining_ && !scheduler_->canTakeImu(waiting_for_prior || scheduler_->pendingImages() == 0) && !scheduler_->ready())
+      {
+        if (scheduler_->pendingImages())
+        {
+          failed_ = true; error_ = "unpaired images or missing final IMU coverage at exit";
+        }
+        quit_ = true; break;
+      }
       Imu imu_msg;
       // Feed only through the next camera timestamp plus its first covering sample.
       // The IMU handler retains the samples needed by the estimator.
-      if (scheduler_->takeImu(imu_msg))
+      if (scheduler_->takeImu(imu_msg, waiting_for_prior || (draining_ && scheduler_->pendingImages() == 0)))
       {
         lock.unlock();
         const auto& w = imu_msg->angular_velocity; const auto& a = imu_msg->linear_acceleration;
         interface_->imu_handler_->addImuMeasurement(svo::ImuMeasurement(
           rclcpp::Time(imu_msg->header.stamp).seconds(), Eigen::Vector3d(w.x,w.y,w.z), Eigen::Vector3d(a.x,a.y,a.z)));
         lock.lock();
+        waiting_for_prior = false;
+      }
+      if (!idle_ && scheduler_->ready() && !scheduler_->leadingNext() &&
+          !interface_->setImuPrior(scheduler_->nextStamp()))
+      {
+        waiting_for_prior = true;
+        if (draining_ && !scheduler_->hasImu())
+        { failed_ = true; error_ = "IMU initialization prior unavailable at exit"; break; }
+        continue;
       }
       Scheduler::Bundle bundle; bool leading = false;
       if (idle_ || !scheduler_->takeImage(bundle, leading)) continue;
       if (leading) { frames_ << bundle.stamp << ",leading_imu_coverage,-1,0,0\n"; continue; }
+      inflight_ = true;
       lock.unlock();
       const auto started = std::chrono::steady_clock::now();
       std::vector<cv::Mat> images;
       for (const auto& msg : bundle.images) images.push_back(cv_bridge::toCvCopy(msg, "mono8")->image);
-      const bool prior = interface_->setImuPrior(bundle.stamp);
-      // A missing initialization prior must remain visible as a processed frame status.
-      if (prior)
-      {
-        interface_->processImageBundle(images, bundle.stamp);
-        interface_->publishResults(images, bundle.stamp);
-      }
+      interface_->processImageBundle(images, bundle.stamp);
       const int stage = static_cast<int>(interface_->svo_->stage());
-      bool pose = prior && interface_->svo_->stage() == svo::Stage::kTracking;
+      bool pose = interface_->svo_->stage() == svo::Stage::kTracking;
+      if (pose)
+      {
+        const auto transform = interface_->svo_->getLastFrames()->get_T_W_B();
+        if (!transform.getPosition().allFinite() || !transform.getRotation().toImplementation().coeffs().allFinite())
+          throw std::runtime_error("Non-finite estimated pose");
+      }
+      interface_->publishResults(images, bundle.stamp);
       const double elapsed = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now()-started).count();
       if (interface_->svo_->stage() == svo::Stage::kPaused && interface_->automatic_reinitialization_) interface_->svo_->start();
       lock.lock();
-      ++processed_; if (pose) ++poses_;
+      inflight_ = false;
+      if (first_processed_stamp_ < 0) first_processed_stamp_ = bundle.stamp;
+      ++processed_; if (pose) { ++poses_; if (initialization_seconds_ < 0) initialization_seconds_ = (bundle.stamp-first_processed_stamp_)*1e-9; }
       if (previous_stage_ == static_cast<int>(svo::Stage::kTracking) && stage != previous_stage_) ++tracking_lost_;
       previous_stage_ = stage; durations_ms_.push_back(elapsed);
-      frames_ << bundle.stamp << ',' << (prior ? "processed" : "initializing_imu_prior") << ',' << stage << ',' << elapsed << ',' << pose << '\n';
+      frames_ << bundle.stamp << ',' << "processed" << ',' << stage << ',' << elapsed << ',' << pose << '\n';
     }
   }
   catch (const std::exception& error)
   {
     if (!lock.owns_lock()) lock.lock();
-    failed_ = true; error_ = "estimator exception";
+    inflight_ = false; failed_ = true; error_ = "estimator exception";
     RCLCPP_ERROR(get_logger(), "Runtime stopped: %s", error.what());
   }
   closeRun();

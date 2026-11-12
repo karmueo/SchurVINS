@@ -544,7 +544,7 @@ void publishGtsamPoseCovariance(
   */
 
   const Matrix3d pose_covariance = covariance.bottomRightCorner(3,3);
-  Eigen::JacobiSVD<Matrix3d> svd(pose_covariance, Eigen::ComputeThinU | Eigen::ComputeThinV);
+  Eigen::JacobiSVD<Matrix3d> svd(pose_covariance, Eigen::ComputeFullU | Eigen::ComputeFullV);
   auto S = svd.singularValues();
   VLOG(20) << "Eigenvalues are " << S(0) << ", " << S(1) << ", " << S(2);
   Eigen::Matrix3d R_body = svd.matrixU();
