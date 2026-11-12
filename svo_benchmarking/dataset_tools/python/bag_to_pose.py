@@ -1,53 +1,14 @@
 #!/usr/bin/env python3
-
-from svo_ceres_benchmarking.rosbag2_io import read_messages, stamp_seconds, stamp_ns
+"""Export supported ROS2 stamped poses to id + TUM rows."""
 import argparse
+from svo_ceres_benchmarking.data_export import export_pose
 
-def extract(bagfile, pose_topic, out_filename):
-    n = 0
-    f = open(out_filename, 'w')
-    f.write('# id timestamp tx ty tz qx qy qz qz\n')
-    bag_uri = bagfile
-    for (topic, msg, ts) in read_messages(bag_uri, topics=str(pose_topic)):
-        if False:
-            # Geometry Message PoseWithCovarianceStamped
-            f.write('%d %.12f %.12f %.12f %.12f %.12f %.12f %.12f %.12f\n' %
-                    (n,
-                     stamp_seconds(msg.header.stamp),
-                     msg.pose.pose.position.x, msg.pose.pose.position.y, msg.pose.pose.position.z,
-                     msg.pose.pose.orientation.x, msg.pose.pose.orientation.y, msg.pose.pose.orientation.z, msg.pose.pose.orientation.w))
-        elif True:
-            # Geometry Message PoseStamped
-            f.write('%d %.12f %.12f %.12f %.12f %.12f %.12f %.12f %.12f\n' %
-                    (n,
-                     stamp_seconds(msg.header.stamp),
-                     msg.pose.position.x, msg.pose.position.y, msg.pose.position.z,
-                     msg.pose.orientation.x, msg.pose.orientation.y, msg.pose.orientation.z, msg.pose.orientation.w))
-        elif False:
-            # Geometry Message PointStamped
-            f.write('%d %.12f %.12f %.12f %.12f %.12f %.12f %.12f %.12f\n' %
-                    (n,
-                     stamp_seconds(msg.header.stamp),
-                     msg.point.x, msg.point.y, msg.point.z,
-                     0, 0, 0, 1))
-        else:
-            # Transform Stamped
-            f.write('%d %.12f %.12f %.12f %.12f %.12f %.12f %.12f %.12f\n' %
-                    (n,
-                     stamp_seconds(msg.header.stamp),
-                     msg.transform.translation.x, msg.transform.translation.y, msg.transform.translation.z,
-                     msg.transform.rotation.x, msg.transform.rotation.y, msg.transform.rotation.z, msg.transform.rotation.w))
-        n += 1
-    print(('wrote ' + str(n) + ' pose messages to the file: ' + out_filename))
+extract = export_pose
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='''
-    Extracts IMU messages from bagfile.
-    ''')
-    parser.add_argument('bag', help='Bagfile')
-    parser.add_argument('topic', help='Topic')
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('bag', help='ROS2 MCAP/SQLite3 file or bag directory')
+    parser.add_argument('topic')
+    parser.add_argument('--output', default='groundtruth.txt')
     args = parser.parse_args()
-    out_filename = 'groundtruth.txt'
-    print(('Extract pose from bag '+args.bag+' in topic ' + args.topic))
-    print(('Saving to file '+out_filename))
-    extract(args.bag, args.topic, out_filename)
+    print(f'Wrote {extract(args.bag, args.topic, args.output)} poses to {args.output}')

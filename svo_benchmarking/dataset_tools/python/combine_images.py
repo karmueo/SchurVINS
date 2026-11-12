@@ -1,42 +1,38 @@
 #!/usr/bin/env python3
-"""
-@author: Jonathan Huber
-
-@brief: combine two image lists of stereo pair to format, which can be used
-by benchmark_node_with_ceres. Will append each image in images_1.txt to
-corresponding line in images_0.txt
-"""
-
-f = open('images_1.txt', "r")
-lines = f.readlines()
-images_1 = []
-timestamps_1 = []
-for x in lines:
-    images_1.append(x.split(' ')[2])
-    timestamps_1.append(x.split(' ')[1])
-f.close()
-
-file_lines = []
-with open('images_0.txt', 'r') as f:
-    i = 0
-    for x in f.readlines():
-        timestamp_0 = x.split(' ')[1]
-        while(timestamps_1[i] < timestamp_0):
-            i = i+1
-            if(i == len(timestamps_1)):
-                break
-        if(i == len(timestamps_1)):
-            break
-        if timestamps_1[i] == timestamp_0:
-            file_lines.append(''.join([x.strip(), ' ', images_1[i], '\n']))
-            i = i+1
-            if(i == len(timestamps_1)):
-                break
-        elif timestamps_1[i] > timestamp_0:
-            continue
+"""Pair image indexes by exactly equal timestamps; preserve image paths and order."""
+import argparse
+from decimal import Decimal
+from pathlib import Path
 
 
-with open('images_combined.txt', 'w') as f:
-    f.writelines(file_lines)
+def combine(left, right, output):
+    def rows(path):
+        return [line.split() for line in Path(path).read_text().splitlines()
+                if line.strip() and not line.lstrip().startswith('#')]
+    left_rows, right_rows = rows(left), rows(right)
+    by_stamp = {}
+    for row in right_rows:
+        stamp = Decimal(row[1])
+        if stamp in by_stamp:
+            raise ValueError(f'Duplicate right timestamp: {stamp}')
+        by_stamp[stamp] = row[2]
+    count = 0
+    with Path(output).open('w') as stream:
+        stream.write('# id timestamp image_0 image_1\n')
+        for row in left_rows:
+            right_image = by_stamp.pop(Decimal(row[1]), None)
+            if right_image is not None:
+                stream.write(f'{count} {row[1]} {row[2]} {right_image}\n')
+                count += 1
+    if count != len(left_rows) or count != len(right_rows):
+        raise ValueError(f'Unpaired images: left={len(left_rows)}, right={len(right_rows)}, paired={count}')
+    return count
 
-print('Created file images_combined.txt')
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--left', default='images_0.txt')
+    parser.add_argument('--right', default='images_1.txt')
+    parser.add_argument('--output', default='images_combined.txt')
+    args = parser.parse_args()
+    print(f'Paired {combine(args.left, args.right, args.output)} stereo images')

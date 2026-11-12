@@ -14,7 +14,7 @@ def strip_gt_id_and_save(id_stamp_gt_fn):
     print(("Going to strip id from {0} and write to {1}".format(
         id_stamp_gt_fn, outfn)))
 
-    id_stamp_gt = np.loadtxt(id_stamp_gt_fn)
+    id_stamp_gt = np.atleast_2d(np.loadtxt(id_stamp_gt_fn))
     print(("Found {0} groundtruth data".format(id_stamp_gt.shape[0])))
 
     stamp_gt = []

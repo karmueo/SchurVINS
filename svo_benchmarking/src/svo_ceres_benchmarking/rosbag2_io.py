@@ -30,6 +30,9 @@ def read_messages(uri, topics=None):
     if isinstance(topics, str):
         topics = [topics]
     if topics:
+        missing = set(topics) - types.keys()
+        if missing:
+            raise ValueError(f'Topics not found in bag: {sorted(missing)}')
         reader.set_filter(rosbag2_py.StorageFilter(topics=topics))
     classes = {}
     while reader.has_next():

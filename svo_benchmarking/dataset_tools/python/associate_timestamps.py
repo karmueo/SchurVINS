@@ -112,6 +112,7 @@ if __name__ == '__main__':
     parser.add_argument('second_file', help='groundtruth (format: timestamp data)')
     parser.add_argument('--offset', help='time offset added to the timestamps of the second file (default: 0.0)',default=0.0)
     parser.add_argument('--max_difference', help='maximally allowed time difference for matching entries (default: 0.02)',default=0.02)
+    parser.add_argument('--output', default='matches.txt')
     args = parser.parse_args()
 
     first_list = read_file_list(args.first_file)
@@ -119,7 +120,7 @@ if __name__ == '__main__':
 
     matches = associate(first_list, second_list,float(args.offset),float(args.max_difference))
 
-    filename = 'matches.txt'
+    filename = args.output
     associates_file = open(filename, 'w')
     associates_file.write('# %s %s\n' % (args.first_file, args.second_file))
     for a,b in matches:
