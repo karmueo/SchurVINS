@@ -57,7 +57,7 @@ class LocalParamizationAdditionalInterfaces
   /// @param[in] x_plus_delta Perturbed variable.
   /// @param[out] delta minimal difference.
   /// \return True on success.
-  virtual bool Minus(const double* x, const double* x_plus_delta,
+  virtual bool Minus(const double* x_plus_delta, const double* x,
                      double* delta) const = 0;
 
   /// \brief Computes the Jacobian from minimal space to naively

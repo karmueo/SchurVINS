@@ -55,7 +55,7 @@ Map::Map()
     : residual_counter_(0)
 {
   ceres::Problem::Options problemOptions;
-  problemOptions.local_parameterization_ownership =
+  problemOptions.manifold_ownership =
       ceres::Ownership::DO_NOT_TAKE_OWNERSHIP;
   problemOptions.loss_function_ownership =
       ceres::Ownership::DO_NOT_TAKE_OWNERSHIP;
@@ -338,7 +338,7 @@ bool Map::addParameterBlock(
       dynamic_cast<const ceres_backend::LocalParamizationAdditionalInterfaces*>(
       parameter_block->localParameterizationPtr());
   if(ptr)
-    std::cout<<"verify local size "<< parameter_block->localParameterizationPtr()->LocalSize() << " = "<<
+    std::cout<<"verify local size "<< parameter_block->localParameterizationPtr()->TangentSize() << " = "<<
             int(ptr->verify(parameter_block->parameters()))<<
             std::endl;*/
 
@@ -688,13 +688,13 @@ bool Map::resetParameterization(uint64_t parameter_block_id,
 // Set the (local) parameterisation of a parameter block.
 bool Map::setParameterization(
     uint64_t parameter_block_id,
-    ceres::LocalParameterization* local_parameterization)
+    ceres::Manifold* local_parameterization)
 {
   if (!parameterBlockExists(parameter_block_id))
   {
     return false;
   }
-  problem_->SetParameterization(
+  problem_->SetManifold(
       id_to_parameter_block_map_.find(parameter_block_id)->second->parameters(),
       local_parameterization);
   id_to_parameter_block_map_.find(parameter_block_id)->second

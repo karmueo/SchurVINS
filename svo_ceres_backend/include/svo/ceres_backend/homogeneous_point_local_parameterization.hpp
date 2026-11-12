@@ -55,7 +55,7 @@ namespace ceres_backend {
 /// \brief Local parameterisation of a homogeneous point [x,y,z,w]^T.
 ///        We use a Euclidean-type perturbation, i.e. only affect the x-y-z-part.
 class HomogeneousPointLocalParameterization :
-    public ceres::LocalParameterization,
+    public ceres::Manifold,
     public LocalParamizationAdditionalInterfaces
 {
  public:
@@ -79,7 +79,7 @@ class HomogeneousPointLocalParameterization :
   /// @param[in] x_plus_delta Perturbed variable.
   /// @param[out] delta minimal difference.
   /// \return True on success.
-  virtual bool Minus(const double* x, const double* x_plus_delta,
+  virtual bool Minus(const double* x_plus_delta, const double* x,
                      double* delta) const;
 
   /// \brief The jacobian of Plus(x, delta) w.r.t delta at delta = 0.
@@ -93,6 +93,12 @@ class HomogeneousPointLocalParameterization :
   /// @param[out] jacobian the Jacobian (dimension minDim x dim).
   /// \return True on success.
   virtual bool ComputeLiftJacobian(const double* x, double* jacobian) const;
+
+  bool PlusJacobian(const double* x, double* jacobian) const override
+  { return plusJacobian(x, jacobian); }
+
+  bool MinusJacobian(const double* x, double* jacobian) const override
+  { return liftJacobian(x, jacobian); }
 
   // provide these as static for easy use elsewhere:
 
@@ -125,13 +131,13 @@ class HomogeneousPointLocalParameterization :
   static bool liftJacobian(const double* x, double* jacobian);
 
   /// \brief The parameter block dimension.
-  virtual int GlobalSize() const
+  int AmbientSize() const
   {
     return 4;
   }
 
   /// \brief The parameter block local dimension.
-  virtual int LocalSize() const
+  int TangentSize() const
   {
     return 3;
   }

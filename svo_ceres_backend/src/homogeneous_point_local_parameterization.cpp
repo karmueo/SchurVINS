@@ -73,8 +73,8 @@ bool HomogeneousPointLocalParameterization::plus(const double* x,
 }
 
 // Computes the minimal difference between a variable x and a perturbed variable x_plus_delta.
-bool HomogeneousPointLocalParameterization::Minus(const double* x,
-                                                  const double* x_plus_delta,
+bool HomogeneousPointLocalParameterization::Minus(const double* x_plus_delta,
+                                      const double* x,
                                                   double* delta) const
 {
   return minus(x, x_plus_delta, delta);

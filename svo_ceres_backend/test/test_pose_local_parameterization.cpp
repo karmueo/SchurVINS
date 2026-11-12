@@ -2,7 +2,7 @@
 // Unauthorized copying of this file, via any medium is strictly prohibited
 // Proprietary and confidential
 
-#include <eigen-checks/gtest.h>
+#include <vikit/eigen_checks.h>
 #include <gtest/gtest.h>
 
 #include <aslam/common/entrypoint.h>
@@ -100,3 +100,54 @@ TEST(poseLocalParametrizationTests, LiftJacobianTest)
 }
 
 VIKIT_UNITTEST_ENTRYPOINT
+
+// Exercise the Ceres 2 Manifold interface, whose Minus argument order differs
+// from the legacy static minus(x, y) helper used by marginalization.
+TEST(PoseManifold, PreservesLeftAxisAngleUpdateAndInverse)
+{
+  svo::ceres_backend::PoseLocalParameterization manifold;
+  Eigen::Matrix<double, 7, 1> x;
+  const Eigen::Quaterniond q(Eigen::AngleAxisd(0.7, Eigen::Vector3d(1, 2, 3).normalized()));
+  x << 1, -2, 3, q.x(), q.y(), q.z(), q.w();
+  Eigen::Matrix<double, 6, 1> delta;
+  delta << 0.1, -0.2, 0.3, 0.12, -0.08, 0.04;
+  Eigen::Matrix<double, 7, 1> y;
+  ASSERT_TRUE(manifold.Plus(x.data(), delta.data(), y.data()));
+  Eigen::Quaterniond expected = Eigen::Quaterniond(Eigen::AngleAxisd(
+      delta.tail<3>().norm(), delta.tail<3>().normalized())) * q;
+  EXPECT_LT((y.tail<4>() - expected.coeffs()).norm(), 1e-12);
+  Eigen::Matrix<double, 6, 1> recovered;
+  ASSERT_TRUE(manifold.Minus(y.data(), x.data(), recovered.data()));
+  EXPECT_LT((recovered - delta).norm(), 1e-12);
+
+  Eigen::Matrix<double, 7, 6, Eigen::RowMajor> plus;
+  Eigen::Matrix<double, 6, 7, Eigen::RowMajor> minus;
+  ASSERT_TRUE(manifold.PlusJacobian(x.data(), plus.data()));
+  ASSERT_TRUE(manifold.MinusJacobian(x.data(), minus.data()));
+  EXPECT_LT((minus * plus - Eigen::Matrix<double, 6, 6>::Identity()).norm(), 1e-12);
+  const double step = 1e-7;
+  for (int i = 0; i < 6; ++i)
+  {
+    Eigen::Matrix<double, 6, 1> perturb = Eigen::Matrix<double, 6, 1>::Zero();
+    Eigen::Matrix<double, 7, 1> yp, ym;
+    perturb[i] = step;
+    manifold.Plus(x.data(), perturb.data(), yp.data());
+    perturb[i] = -step;
+    manifold.Plus(x.data(), perturb.data(), ym.data());
+    EXPECT_LT(((yp - ym) / (2 * step) - plus.col(i)).norm(), 1e-8);
+  }
+  for (int i = 0; i < 7; ++i)
+  {
+    auto yp = x.eval();
+    auto ym = x.eval();
+    yp[i] += step;
+    ym[i] -= step;
+    // Ambient quaternion derivatives are evaluated on the unit sphere.
+    yp.tail<4>().normalize();
+    ym.tail<4>().normalize();
+    Eigen::Matrix<double, 6, 1> dp, dm;
+    manifold.Minus(yp.data(), x.data(), dp.data());
+    manifold.Minus(ym.data(), x.data(), dm.data());
+    EXPECT_LT(((dp - dm) / (2 * step) - minus.col(i)).norm(), 1e-8);
+  }
+}

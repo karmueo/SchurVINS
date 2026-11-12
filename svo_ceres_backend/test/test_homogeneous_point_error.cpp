@@ -101,3 +101,22 @@ TEST(okvisTestSuite, HomogeneousPointError)
 }
 
 VIKIT_UNITTEST_ENTRYPOINT
+
+TEST(HomogeneousPointManifold, FixedScaleAndCeresMinusOrder)
+{
+  svo::ceres_backend::HomogeneousPointLocalParameterization manifold;
+  const Eigen::Vector4d x(1, 2, -3, 0.5);
+  const Eigen::Vector3d delta(0.2, -0.1, 0.3);
+  Eigen::Vector4d y;
+  Eigen::Vector3d recovered;
+  ASSERT_TRUE(manifold.Plus(x.data(), delta.data(), y.data()));
+  EXPECT_DOUBLE_EQ(y[3], x[3]);
+  ASSERT_TRUE(manifold.Minus(y.data(), x.data(), recovered.data()));
+  EXPECT_LT((recovered - delta).norm(), 1e-14);
+  Eigen::Matrix<double, 4, 3, Eigen::RowMajor> plus;
+  Eigen::Matrix<double, 3, 4, Eigen::RowMajor> minus;
+  manifold.PlusJacobian(x.data(), plus.data());
+  manifold.MinusJacobian(x.data(), minus.data());
+  EXPECT_LT((minus * plus - Eigen::Matrix3d::Identity()).norm(), 1e-14);
+  EXPECT_DOUBLE_EQ(plus.row(3).norm(), 0.0);
+}
