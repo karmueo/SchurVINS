@@ -58,7 +58,7 @@ def main():
     cameras = len(topics)
     if not args.no_imu:
         topics += ['/imu0']
-    metadata = rosbag2_py.Info().read_metadata(args.bag)
+    metadata = rosbag2_py.Info().read_metadata(args.bag, '')
     counts = {entry.topic_metadata.name: entry.message_count for entry in metadata.topics_with_message_count}
     images = counts['/cam0/image_raw']
     if cameras == 2 and counts['/cam1/image_raw'] != images:
