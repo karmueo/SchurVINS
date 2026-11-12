@@ -57,6 +57,8 @@ if __name__ == '__main__':
 
         print(("{0} -> {1}".format(from_d, to_d)))
         for f in os.listdir(from_d):
-            if not os.path.isfile(os.path.join(from_d, f)):
-                continue
-            shutil.copy(os.path.join(from_d, f), os.path.join(to_d, f))
+            source, destination = os.path.join(from_d, f), os.path.join(to_d, f)
+            if os.path.isdir(source):
+                shutil.copytree(source, destination, dirs_exist_ok=True)
+            elif os.path.isfile(source):
+                shutil.copy(source, destination)

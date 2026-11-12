@@ -1,25 +1,15 @@
 #!/usr/bin/env python3
-
+"""Run configured evaluations recursively, including isolated benchmark trial runs."""
 import argparse
-import os
-
+from pathlib import Path
 from evaluate import evaluate_dataset
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='''
-    run the evaluation for all subfolders
-    ''')
-    parser.add_argument(
-        'top_dir', help='directory name of the tracefiles')
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('top_dir')
     args = parser.parse_args()
-
-    subfolders = [v for v in os.listdir(args.top_dir)
-                  if os.path.isdir(os.path.join(args.top_dir, v))]
-    print(("Going to evaluate the following folders:{0}".format(subfolders)))
-    subfolders = [os.path.join(args.top_dir, v) for v in subfolders]
-
-    for s in subfolders:
-        if not os.path.exists(os.path.join(s, 'evaluation_scripts.yaml')):
-            print(("skip {0}".format(s)))
-            continue
-        evaluate_dataset(s)
+    configurations = sorted(Path(args.top_dir).resolve().rglob('evaluation_scripts.yaml'))
+    if not configurations:
+        raise SystemExit('No evaluation_scripts.yaml found')
+    for configuration in configurations:
+        evaluate_dataset(str(configuration.parent))
