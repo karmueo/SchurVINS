@@ -22,6 +22,7 @@
 #include <visualization_msgs/msg/marker_array.hpp>
 #include <sensor_msgs/msg/image.hpp>
 #include <sensor_msgs/msg/camera_info.hpp>
+#include <functional>
 #include <nav_msgs/msg/odometry.hpp>
 #include <std_msgs/msg/color_rgba.hpp>
 #include <tf2_ros/transform_broadcaster.h>
@@ -75,11 +76,14 @@ public:
 
   std::string traj_path_;
   std::ofstream save_traj_;
+  // Synchronous output sink: offline recording does not depend on DDS delivery.
+  std::function<void(const nav_msgs::msg::Odometry&, const nav_msgs::msg::Path&)> pose_sink_;
 
   rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr pub_frames_;
   rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr pub_points_;
   rclcpp::Publisher<geometry_msgs::msg::PoseWithCovarianceStamped>::SharedPtr pub_imu_pose_;
   rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr pub_imu_path_;
+  rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr pub_odometry_;
   nav_msgs::msg::Path imu_path_;
   rclcpp::Publisher<svo_msgs::msg::Info>::SharedPtr pub_info_;
   rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr pub_markers_;
@@ -123,7 +127,7 @@ public:
   std::string img_caption_;
 
   Visualizer(const std::string& trace_dir, rclcpp::Node& nh_private,
-             const size_t num_cameras);
+             const size_t num_cameras, std::ofstream trajectory = std::ofstream());
 
   ~Visualizer() = default;
 

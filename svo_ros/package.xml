@@ -17,6 +17,10 @@
   <depend>nav_msgs</depend>
   <depend>rclcpp</depend>
   <depend>rclcpp_components</depend>
+  <depend>rosbag2_cpp</depend>
+  <depend>rosbag2_storage</depend>
+  <depend>rosgraph_msgs</depend>
+  <exec_depend>rosbag2_storage_mcap</exec_depend>
   <depend>rpg_common</depend>
   <depend>sensor_msgs</depend>
   <depend>std_msgs</depend>
@@ -34,6 +38,9 @@
   <depend>vikit_ros</depend>
   <depend>visualization_msgs</depend>
   <test_depend>ament_cmake_gtest</test_depend>
+  <test_depend>ament_cmake_pytest</test_depend>
+  <test_depend>rosbag2_py</test_depend>
+  <test_depend>rclpy</test_depend>
   <export>
     <build_type>ament_cmake</build_type>
   </export>

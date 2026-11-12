@@ -25,7 +25,7 @@ private:
   void image(size_t camera, Image msg);
   void imu(Imu msg);
   void worker();
-  void createEstimator();
+  void createEstimator(std::ofstream trajectory = std::ofstream());
   void closeRun();
   void saveConfiguration();
   void publishStatus();

@@ -38,7 +38,7 @@ namespace svo {
 SvoInterface::SvoInterface(
     const PipelineType& pipeline_type,
     rclcpp::Node& nh,
-    rclcpp::Node& private_nh, const std::string& run_dir)
+    rclcpp::Node& private_nh, const std::string& run_dir, std::ofstream trajectory)
   : pnh_(private_nh)
   , pipeline_type_(pipeline_type)
   , set_initial_attitude_from_gravity_(
@@ -68,7 +68,7 @@ SvoInterface::SvoInterface(
     throw std::invalid_argument("Calibration camera count does not match selected pipeline");
 
   visualizer_.reset(
-        new Visualizer(svo_->options_.trace_dir, pnh_, ncam_->getNumCameras()));
+        new Visualizer(svo_->options_.trace_dir, pnh_, ncam_->getNumCameras(), std::move(trajectory)));
 
   if(vk::param<bool>(pnh_, "use_imu", false))
   {

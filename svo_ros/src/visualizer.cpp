@@ -151,13 +151,14 @@ std::string Visualizer::kWorldFrame = std::string("world");
 
 Visualizer::Visualizer(const std::string& trace_dir,
                        rclcpp::Node& nh_private,
-                       const size_t n_cameras)
+                       const size_t n_cameras, std::ofstream trajectory)
   : pnh_(nh_private)
   , trace_dir_(trace_dir)
   , img_pub_level_(vk::param<int>(pnh_, "publish_img_pyr_level", 0))
   , img_pub_nth_(vk::param<int>(pnh_, "publish_every_nth_img", 1))
   , dense_pub_nth_(vk::param<int>(pnh_, "publish_every_nth_dense_input", 1))
   , viz_caption_str_(vk::param<bool>(pnh_, "publish_image_caption_str", false))
+  , save_traj_(std::move(trajectory))
   , pc_(new PointCloud)
   , br_(pnh_)
   , publish_world_in_cam_frame_(
@@ -176,9 +177,18 @@ Visualizer::Visualizer(const std::string& trace_dir,
 {
   // Init traj saver
   std::filesystem::create_directories(trace_dir);
-  traj_path_ = (std::filesystem::path(trace_dir) / "imu_traj.txt").string();
-  save_traj_.open(traj_path_);
-  if (!save_traj_) throw std::runtime_error("Cannot open IMU trajectory: " + traj_path_);
+  if (vk::param<bool>(pnh_, "save_trajectory", true))
+  {
+    traj_path_ = vk::param<std::string>(pnh_, "trajectory_file", "");
+    if (traj_path_.empty()) traj_path_ = (std::filesystem::path(trace_dir) / "imu_traj.txt").string();
+    if (!save_traj_.is_open())
+    {
+      if (std::filesystem::exists(traj_path_))
+        throw std::runtime_error("Refusing to overwrite trajectory: " + traj_path_);
+      save_traj_.open(traj_path_);
+      if (!save_traj_) throw std::runtime_error("Cannot open IMU trajectory: " + traj_path_);
+    }
+  }
 
   // Init ROS Marker Publishers
   pub_frames_ = pnh_.create_publisher<visualization_msgs::msg::Marker>("/svo/keyframes", 10);
@@ -187,6 +197,7 @@ Visualizer::Visualizer(const std::string& trace_dir,
       pnh_.create_publisher<geometry_msgs::msg::PoseWithCovarianceStamped>("/svo/pose_imu", 10);
   pub_imu_path_ = 
       pnh_.create_publisher<nav_msgs::msg::Path>("/svo/path_imu", 10);
+  pub_odometry_ = pnh_.create_publisher<nav_msgs::msg::Odometry>("/svo/odometry", 10);
   pub_info_ = pnh_.create_publisher<svo_msgs::msg::Info>("/svo/info", 10);
   pub_markers_ = pnh_.create_publisher<visualization_msgs::msg::Marker>("/svo/markers", 100);
   pub_pc_ = pnh_.create_publisher<sensor_msgs::msg::PointCloud2>("/svo/pointcloud", 1);
@@ -289,8 +300,25 @@ void Visualizer::publishImuPose(const Transformation& T_world_imu,
   imu_path_.poses.push_back(pose);
   pub_imu_path_->publish(imu_path_);
 
-  save_traj_ << std::fixed << std::setprecision(10) << 1e-9 * timestamp_nanoseconds << " " << p[0] << " " << p[1]
-              << " " << p[2] << " " << q.x() << " " << q.y() << " " << q.z() << " " << q.w() << std::endl;
+  nav_msgs::msg::Odometry odometry;
+  odometry.header = msg_pose->header;
+  odometry.child_frame_id = "imu";
+  odometry.pose = msg_pose->pose;
+  // This pose output does not estimate twist. Mark its covariance as unknown.
+  for (size_t i = 0; i < 6; ++i) odometry.twist.covariance[i*6+i] = 1e12;
+  pub_odometry_->publish(odometry);
+  if (pose_sink_) pose_sink_(odometry, imu_path_);
+
+  if (save_traj_.is_open())
+  {
+    // Keep nanoseconds exact rather than rounding an epoch-sized double.
+    save_traj_ << timestamp_nanoseconds / 1000000000LL << '.'
+               << std::setw(9) << std::setfill('0') << timestamp_nanoseconds % 1000000000LL
+               << std::setfill(' ') << std::setprecision(17)
+               << " " << p[0] << " " << p[1] << " " << p[2]
+               << " " << q.x() << " " << q.y() << " " << q.z() << " " << q.w() << '\n';
+    if (!save_traj_) throw std::runtime_error("Failed writing trajectory: " + traj_path_);
+  }
 }
 
 void Visualizer::publishCameraPoses(const FrameBundlePtr& frame_bundle,

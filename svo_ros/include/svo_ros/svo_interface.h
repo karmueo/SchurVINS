@@ -1,6 +1,7 @@
 #pragma once
 
 #include <thread>
+#include <fstream>
 
 #include <rclcpp/rclcpp.hpp>
 #include <std_msgs/msg/string.hpp>    // user-input
@@ -55,7 +56,8 @@ public:
 
   SvoInterface(const PipelineType& pipeline_type,
           rclcpp::Node& nh,
-          rclcpp::Node& private_nh, const std::string& run_dir = "");
+          rclcpp::Node& private_nh, const std::string& run_dir = "",
+          std::ofstream trajectory = std::ofstream());
 
   virtual ~SvoInterface();
 

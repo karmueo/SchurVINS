@@ -9,7 +9,7 @@
 #include <sensor_msgs/msg/image.hpp>
 #include <sensor_msgs/msg/imu.hpp>
 #include <std_msgs/msg/string.hpp>
-#include <Eigen/Core>
+#include <svo_ros/ego_processing.h>
 namespace svo_ros {
 class EgoInput : public rclcpp::Node
 {
@@ -21,7 +21,7 @@ private:
   void decodeImages();
   void decodeImage(sensor_msgs::msg::CompressedImage::ConstSharedPtr msg);
   void imu(sensor_msgs::msg::Imu::ConstSharedPtr msg);
-  Eigen::Vector3d acc_bias_, gyro_bias_;
+  EgoProcessing processing_;
   rclcpp::CallbackGroup::SharedPtr image_group_, imu_group_;
   rclcpp::Subscription<sensor_msgs::msg::CompressedImage>::SharedPtr image_sub_;
   rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr imu_sub_;

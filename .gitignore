@@ -5,6 +5,9 @@
 /install*/
 /results/
 /logs/
+/ros2_ws/
+/.cache/
 
 __pycache__/
 *.py[cod]
+output

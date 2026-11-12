@@ -67,7 +67,7 @@ SvoNodeBase::~SvoNodeBase()
   changed_.notify_all();
   if (worker_.joinable()) worker_.join();
 }
-void SvoNodeBase::createEstimator()
+void SvoNodeBase::createEstimator(std::ofstream trajectory)
 {
   const auto image_limit = vk::param<int>(*this, "image_queue_capacity", 64);
   const auto imu_limit = vk::param<int>(*this, "imu_queue_capacity", 10000);
@@ -77,7 +77,7 @@ void SvoNodeBase::createEstimator()
   const auto id = std::chrono::system_clock::now().time_since_epoch().count();
   run_dir_ = (std::filesystem::path(output_root_) / ("run_" + std::to_string(id))).string();
   if (!std::filesystem::create_directory(run_dir_)) throw std::runtime_error("Run directory exists");
-  interface_ = std::make_unique<svo::SvoInterface>(type_, *this, *this, run_dir_);
+  interface_ = std::make_unique<svo::SvoInterface>(type_, *this, *this, run_dir_, std::move(trajectory));
   frames_.open(run_dir_ + "/frames.csv");
   if (!frames_) throw std::runtime_error("Cannot open frame statistics");
   frames_ << "timestamp_ns,status,stage,processing_ms,pose_available\n";
@@ -172,6 +172,7 @@ void SvoNodeBase::publishStatus()
 void SvoNodeBase::closeRun()
 {
   frames_.flush();
+  if (interface_ && interface_->visualizer_->save_traj_.is_open()) interface_->visualizer_->save_traj_.flush();
   std::ofstream summary(run_dir_ + "/summary.json");
   auto sorted = durations_ms_; std::sort(sorted.begin(), sorted.end());
   auto quantile = [&](double q) { return sorted.empty() ? 0.0 : sorted[static_cast<size_t>(q*(sorted.size()-1))]; };
@@ -204,7 +205,14 @@ void SvoNodeBase::worker()
         if (command == 'q') { draining_ = true; idle_ = false; continue; }
         if (command == 'r')
         {
-          closeRun(); frames_.close(); interface_.reset(); ++resets_; createEstimator(); saveConfiguration(); waiting_for_prior = false; idle_ = true;
+          closeRun(); frames_.close();
+          // An explicitly named export belongs to the live session across resets.
+          // Default per-run traces continue to use each new run directory.
+          std::ofstream trajectory;
+          if (has_parameter("trajectory_file") && !get_parameter("trajectory_file").as_string().empty())
+            trajectory = std::move(interface_->visualizer_->save_traj_);
+          interface_.reset(); ++resets_; createEstimator(std::move(trajectory));
+          saveConfiguration(); waiting_for_prior = false; idle_ = true;
         }
         else if (command == 's') { interface_->svo_->start(); idle_ = false; }
         else if (command == 'c' || command == 'C') interface_->svo_->setCompensation(command == 'c');

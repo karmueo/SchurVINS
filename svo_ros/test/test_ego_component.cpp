@@ -19,7 +19,7 @@ TEST(EgoComponent, ActualCallbacksCorrectAndSplitWithoutAccumulation)
                    "  gyroscope_bias: [180.0, 90.0, -180.0]\n";
   }
   rclcpp::NodeOptions options;
-  options.parameter_overrides({rclcpp::Parameter("source_calibration", fixture.string())});
+  options.parameter_overrides({rclcpp::Parameter("cameras", fixture.string())});
   auto adapter = std::make_shared<svo_ros::EgoInput>(options);
   auto source = std::make_shared<rclcpp::Node>("ego_component_fixture");
   auto image_publisher = source->create_publisher<sensor_msgs::msg::CompressedImage>("/stereo/image_raw", rclcpp::QoS(64).reliable());

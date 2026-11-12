@@ -86,8 +86,8 @@ def main():
             raise TimeoutError(f'Acceptance timeout: {status}')
     try:
         launched = subprocess.Popen(['ros2', 'launch', 'svo_ros', 'ego.launch.py',
-                     f'source_calibration:={Path(args.calibration).resolve()}',
-                     f'output_dir:={args.output.resolve()}', 'rviz:=false'],
+                     f'cameras:={Path(args.calibration).resolve()}',
+                     f'output_dir:={args.output.resolve()}', 'save_trajectory:=true', 'rviz:=false'],
                      stdout=launch_log, stderr=subprocess.STDOUT, start_new_session=True)
         topics = ['/stereo/image_raw', '/imu', '/ego/cam0/image_raw', '/ego/cam1/image_raw', '/ego/imu']
         while not (status['svo'] and status['ego'] and all(node.count_subscribers(t) >= 1 for t in topics)):
@@ -159,14 +159,14 @@ def main():
         checks['actual_estimator_calls'] = sum(f['status'] == 'processed' for f in frames) == expected
         # Flush the component's trajectory stream by orderly container shutdown.
         stop(launched)
-        trajectory = np.atleast_2d(np.loadtxt(run_dir / 'imu_traj.txt'))
+        trajectory = np.atleast_2d(np.loadtxt(args.output / 'schurvins_live_trajectory.txt'))
         checks['finite_monotonic_trajectory'] = bool(trajectory.shape[1] == 8 and np.isfinite(trajectory).all() and np.all(np.diff(trajectory[:, 0]) > 0))
         summary['valid_trajectory_coverage'] = len(trajectory) / expected
         outcome.update(checks=checks, runtime=summary, adapter=status['ego'], run_dir=str(run_dir))
         outcome['passed'] = all(checks.values())
         if args.reference and len(trajectory) >= 3:
             from svo_ceres_benchmarking.reference_report import report
-            outcome['reference'] = report(run_dir / 'imu_traj.txt', args.reference, args.output / 'reference')
+            outcome['reference'] = report(args.output / 'schurvins_live_trajectory.txt', args.reference, args.output / 'reference')
         if not outcome['passed']:
             raise RuntimeError(f'Failed integrity checks: {[key for key,value in checks.items() if not value]}')
     except BaseException as error:
