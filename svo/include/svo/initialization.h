@@ -126,6 +126,8 @@ public:
 
   bool trackFeaturesAndCheckDisparity(const FrameBundlePtr& frames);
 
+  InitResult initializeArrayGeometry(const FrameBundlePtr& frames_cur);
+
   virtual InitResult addFrameBundle(const FrameBundlePtr& frames_cur) = 0;
 
   virtual void reset();

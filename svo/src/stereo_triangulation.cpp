@@ -4,6 +4,8 @@
 // (Robotics and Perception Group, University of Zurich, Switzerland).
 
 #include <numeric>
+#include <cstdlib>
+#include <algorithm>
 #include <svo/direct/matcher.h>
 #include <svo/common/point.h>
 #include <svo/common/frame.h>
@@ -74,8 +76,18 @@ void StereoTriangulation::compute(const FramePtr& frame0,
         [](const FeatureType& t) { return t==FeatureType::kCorner; });
 
   // shuffle twice before we prefer corners!
-  std::random_shuffle(indices.begin(), indices.begin()+n_corners);
-  std::random_shuffle(indices.begin()+n_corners, indices.end());
+  // C++17 removed random_shuffle. Keep its forward Fisher-Yates traversal
+  // and the existing std::rand stream rather than changing estimator sampling.
+  const auto shuffle = [](auto first, auto last)
+  {
+    for (auto it = first; it != last; ++it)
+    {
+      if (it != first)
+        std::iter_swap(it, first + std::rand() % ((it - first) + 1));
+    }
+  };
+  shuffle(indices.begin(), indices.begin()+n_corners);
+  shuffle(indices.begin()+n_corners, indices.end());
 
   // now for all maximum corners, initialize a new seed
   size_t n_succeded = 0, n_failed = 0;

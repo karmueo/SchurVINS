@@ -8,6 +8,8 @@
 
 #include <svo/initialization.h>
 
+#include <array>
+#include <boost/make_shared.hpp>
 #include <random> // std::mt19937
 #include <vector>
 
@@ -446,279 +448,154 @@ InitResult StereoInit::addFrameBundle(
   return InitResult::kSuccess;
 }
 
-InitResult ArrayInitGeometric::addFrameBundle(
+InitResult AbstractInitialization::initializeArrayGeometry(
     const FrameBundlePtr& frames_cur)
 {
-
 #ifdef SVO_USE_OPENGV
-  /*
-  InitResult res = trackBundleFeatures(frames_cur);
-  if(res != InitResult::kSuccess)
-    return res;
+  if (!trackFeaturesAndCheckDisparity(frames_cur))
+    return InitResult::kTracking;
+  frames_ref_ = tracker_->getOldestFrameInTrack(0);
+  if (!frames_ref_ || frames_ref_->size() != frames_cur->size())
+    return InitResult::kFailure;
 
-  // Create vector of bearing vectors and camera correspondences
-  opengv::bearingVectors_t f_cur; f_cur.reserve(frames_cur->numFeatures());
-  opengv::bearingVectors_t f_ref; f_ref.reserve(f_cur.size());
-  std::vector<int> cam_correspondences_cur, cam_correspondences_ref;
-  cam_correspondences_cur.reserve(f_cur.size());
-  cam_correspondences_ref.reserve(f_ref.size());
+  opengv::bearingVectors_t f_cur, f_ref;
   opengv::translations_t cam_translations;
   opengv::rotations_t cam_rotations;
-  for(size_t cam_id=0; cam_id<frames_cur->size(); ++cam_id)
+  std::vector<int> cam_ids_cur, cam_ids_ref;
+  std::vector<FeatureMatches> matches(frames_cur->size());
+  for (size_t cam_id = 0; cam_id < frames_cur->size(); ++cam_id)
   {
-    cam_translations.push_back(frames_cur->at(cam_id)->T_imu_cam().getPosition());
-    cam_rotations.push_back(frames_cur->at(cam_id)->T_imu_cam().getRotationMatrix());
-    const FramePtr& frame_cur = frames_cur->at(cam_id);
-    const FramePtr& frame_ref = frames_ref_->at(cam_id);
-    for(size_t i = 0; i < frame_cur->numFeatures(); ++i)
+    const auto& cur = frames_cur->at(cam_id);
+    const auto& ref = frames_ref_->at(cam_id);
+    cam_translations.push_back(cur->T_imu_cam().getPosition());
+    cam_rotations.push_back(cur->T_imu_cam().getRotationMatrix());
+    feature_tracking_utils::getFeatureMatches(*cur, *ref, &matches[cam_id]);
+    for (const auto& match : matches[cam_id])
     {
-      if(ref_masks_[cam_id](i))
-      {
-        f_cur.push_back(frame_cur->f_vec_.col(i));
-        cam_correspondences_cur.push_back(cam_id);
-        f_ref.push_back(frame_ref->f_vec_.col(i));
-        cam_correspondences_ref.push_back(cam_id);
-      }
+      f_cur.push_back(cur->f_vec_.col(match.first));
+      f_ref.push_back(ref->f_vec_.col(match.second));
+      cam_ids_cur.push_back(static_cast<int>(cam_id));
+      cam_ids_ref.push_back(static_cast<int>(cam_id));
     }
   }
-
-  // set prior
-  Matrix3d R_cur_ref =
-      frames_cur->at(0)->T_imu_world().getRotationMatrix()
-      *frames_ref_->at(0)->T_world_imu().getRotationMatrix();
-
-  // Compute model
+  if (f_cur.size() < std::max<size_t>(6, options_.init_min_inliers))
+    return InitResult::kNoKeyframe;
   opengv::relative_pose::NoncentralRelativeAdapter adapter(
-        f_cur, f_ref, cam_correspondences_cur, cam_correspondences_ref,
-        cam_translations, cam_rotations, R_cur_ref);
-
-  // Create RANSAC object
-  typedef opengv::sac_problems::relative_pose::NoncentralRelativePoseSacProblem Problem;
+      f_cur, f_ref, cam_ids_cur, cam_ids_ref, cam_translations, cam_rotations);
+  using Problem = opengv::sac_problems::relative_pose::NoncentralRelativePoseSacProblem;
   opengv::sac::Ransac<Problem> ransac;
-
-  // Create Problem
-  auto algorithm = opengv::sac_problems::relative_pose::NoncentralRelativePoseSacProblem::SIXPT;
-  boost::shared_ptr<Problem> problem_ptr(new Problem(adapter, algorithm));
-
-  // Run RANSAC:
-  static double inlier_threshold = 1.0 - std::cos(frames_cur->at(0)->getAngleError(options_.reproj_error_thresh));
-  ransac.sac_model_ = problem_ptr;
-  ransac.threshold_ = inlier_threshold;
+  ransac.sac_model_ = std::make_shared<Problem>(adapter, Problem::SIXPT);
+  ransac.threshold_ = 1.0 - std::cos(
+      frames_cur->at(0)->getAngleError(options_.reproj_error_thresh));
   ransac.max_iterations_ = 500;
   ransac.probability_ = 0.995;
-  ransac.computeModel(1);
-
-  VLOG(5) << "RANSAC:" << std::endl
-          << "# Iter = " << ransac.iterations_ << std::endl
-          << "# Inliers = " << ransac.inliers_.size() << std::endl
-          << "Model = " << ransac.model_coefficients_;
-
-  // enough inliers?
-  if(ransac.inliers_.size() < options_.init_min_inliers)
-   return InitResult::kFailure;
-
-  Matrix3d R = ransac.model_coefficients_.leftCols(3);
-  T_cur_from_ref_ = Transformation(
-        Quaternion(R),
-        ransac.model_coefficients_.rightCols(1));
-
-
-  std::cout << "T_cur_ref computed = " << T_cur_from_ref_ << std::endl;
-  T_cur_from_ref_ = Transformation(Quaternion(), Vector3d(-0.6, 0, 0));
-  std::cout << "T_cur_ref set = " << T_cur_from_ref_ << std::endl;
-
-  // for every frame individually
-  for(size_t cam_id=0; cam_id<frames_cur->size(); ++cam_id)
+  if (!ransac.computeModel() || ransac.inliers_.size() < options_.init_min_inliers)
+    return InitResult::kNoKeyframe;
+  T_cur_from_ref_ = Transformation(Quaternion(ransac.model_coefficients_.leftCols(3)),
+                                  ransac.model_coefficients_.rightCols(1));
+  const Transformation T_cur_world = T_cur_from_ref_ * frames_ref_->at(0)->T_imu_world();
+  std::vector<Positions> points(frames_cur->size());
+  size_t n_points = 0;
+  for (size_t cam_id = 0; cam_id < frames_cur->size(); ++cam_id)
   {
-    const FramePtr& frame_cur = frames_cur->at(cam_id);
-    const FramePtr& frame_ref = frames_ref_->at(cam_id);
-
-    frame_cur->T_f_w_ =
-        frame_cur->T_cam_imu()*T_cur_from_ref_*frame_ref->T_imu_world();
-    Transformation T_cur_ref = frame_cur->T_f_w_*frame_ref->T_f_w_.inverse();
-
-
-    // Triangulate
-    std::vector<Vector3d> points_in_cur;
-    //TODO(cfo)
-    //initialization_utils::triangulatePoints(
-    //      frame_cur, frame_ref, T_cur_ref,  options_.reproj_error_thresh, points_in_cur);
-
-    VLOG(3) << "-- CAMERA " << frame_cur->cam()->getLabel()
-            << ": inliers verified = " << points_in_cur.size();
-
-     TODO(cfo)
-    // Rescale 3D points and add to features
-    Transformation T_world_cur = frame_cur->T_f_w_.inverse();
-    auto it_cur = frame_cur->fts_.begin();
-    auto it_ref = frame_ref->fts_.begin();
-    auto it_xyz = points_in_cur.begin();
-    for(; it_cur != frame_cur->fts_.end(); ++it_cur, ++it_ref, ++it_xyz)
+    const auto& cur = frames_cur->at(cam_id);
+    const auto& ref = frames_ref_->at(cam_id);
+    const Transformation T_cur_ref =
+        cur->T_cam_imu() * T_cur_from_ref_ * ref->T_imu_cam();
+    initialization_utils::triangulatePoints(*cur, *ref, T_cur_ref,
+        options_.reproj_error_thresh, matches[cam_id], points[cam_id]);
+    // The rig baseline supplies metric scale. Do not rescale each camera
+    // independently to the monocular depth prior.
+    cur->T_f_w_ = cur->T_cam_imu() * T_cur_world;
+    n_points += matches[cam_id].size();
+  }
+  if (n_points < options_.init_min_inliers)
+    return InitResult::kFailure;
+  for (size_t cam_id = 0; cam_id < frames_cur->size(); ++cam_id)
+  {
+    const auto& cur = frames_cur->at(cam_id);
+    const auto& ref = frames_ref_->at(cam_id);
+    for (size_t i = 0; i < matches[cam_id].size(); ++i)
     {
-      const Vector3d xyz_in_world = T_world_cur * (*it_xyz);
-      PointPtr new_point(new Point(xyz_in_world));
-      new_point->addObservation(frame_ref, *it_ref);
-      new_point->addObservation(frame_cur, *it_cur);
-      (*it_ref)->point = new_point;
-      (*it_cur)->point = new_point;
+      const auto& match = matches[cam_id][i];
+      const int id = cur->track_id_vec_(match.first);
+      PointPtr point(new Point(id, cur->T_world_cam() * points[cam_id].col(i)));
+      cur->landmark_vec_.at(match.first) = point;
+      ref->landmark_vec_.at(match.second) = point;
+      point->addObservation(cur, match.first);
+      point->addObservation(ref, match.second);
     }
   }
-  if(options_.verbose)
-    std::cout << "Total triangulated points =  " << frames_cur->nFts() << std::endl;
-
-  if(frames_cur->nFts() < options_.init_min_inliers)
-  {
-    SVO_WARN_STREAM("Init WARNING: "<<options_.init_min_inliers<<" inliers minimum required.");
-    return InitResult::kFailure;
-  }
-
-  for(size_t i=0; i<frames_cur->size(); ++i)
-  {
-    initialization_utils::displayFeatureTracks(frames_cur->at(i), frames_ref_->at(i));
-
-  }
-  */
-
-
-
   return InitResult::kSuccess;
-
 #else
-  SVO_ERROR_STREAM("You need to compile SVO with OpenGV to use TwoPointInit!");
+  SVO_ERROR_STREAM("Array initialization requires OpenGV.");
   return InitResult::kFailure;
 #endif
 }
 
-InitResult ArrayInitOptimization::addFrameBundle(
-    const FrameBundlePtr& frames_cur)
+InitResult ArrayInitGeometric::addFrameBundle(const FrameBundlePtr& frames_cur)
+{
+  return initializeArrayGeometry(frames_cur);
+}
+
+InitResult ArrayInitOptimization::addFrameBundle(const FrameBundlePtr& frames_cur)
 {
 #ifdef SVO_USE_GTSAM
-
-  InitResult res = trackBundleFeatures(frames_cur);
-  if(res != InitResult::kSuccess)
-    return res;
-
-  gtsam::Cal3_S2::shared_ptr K(new gtsam::Cal3_S2(1.0, 1.0, 0.0, 0.0, 0.0));
-
-  gtsam::noiseModel::Isotropic::shared_ptr pixel_noise_base =
-      gtsam::noiseModel::Isotropic::Sigma(2, 1.0/frames_cur->at(0)->getErrorMultiplier());
-
-  gtsam::SharedNoiseModel pixel_noise =
-      gtsam::noiseModel::Robust::Create(
-        //gtsam::noiseModel::mEstimator::Tukey::Create(4.685), pixel_noise_base);
-        //gtsam::noiseModel::mEstimator::Fair::Create(1.3998), pixel_noise_base);
-        //gtsam::noiseModel::mEstimator::Cauchy::Create(0.1), pixel_noise_base);
-        //gtsam::noiseModel::mEstimator::Welsh::Create(2.9846), pixel_noise_base);
-        gtsam::noiseModel::mEstimator::Huber::Create(1.345), pixel_noise_base);
-
+  const auto result = initializeArrayGeometry(frames_cur);
+  if (result != InitResult::kSuccess)
+    return result;
   gtsam::NonlinearFactorGraph graph;
-  gtsam::Values initial_estimate;
-
-  // Add a prior on reference pose.
-  Matrix<double, 6, 1> refpose_prior_sigmas;
-  refpose_prior_sigmas << 0.0001, 0.0001, 0.0001, // rotation
-                          0.00001, 0.00001, 0.00001; // translation, 1mm
-  gtsam::noiseModel::Gaussian::shared_ptr pose_prior_noise =
-      gtsam::noiseModel::Diagonal::Sigmas(refpose_prior_sigmas);
-  Transformation T_world_refimu = frames_ref_->at(0)->T_world_imu();
-  gtsam::Pose3 pose_ref(
-        gtsam::Rot3(T_world_refimu.getRotationMatrix()),
-        gtsam::Point3(T_world_refimu.getPosition()));
-  graph.push_back(gtsam::PriorFactor<gtsam::Pose3>(
-                    gtsam::Symbol('x', 0), pose_ref, pose_prior_noise)); // add directly to graph
-
-  Matrix3d eye = Matrix3d::Identity();
-  gtsam::Pose3 T_prior(gtsam::Rot3(eye), Vector3d::Zero());
-  std::cout << "Prior = " << T_prior << std::endl;
-  Matrix<double, 6, 6> relpose_prior_info;
-  relpose_prior_info.setZero();
-  relpose_prior_info.block<3,3>(0,0) = Matrix3d::Identity()*1e8;
-  gtsam::noiseModel::Gaussian::shared_ptr T_prior_noise =
-      gtsam::noiseModel::Diagonal::Information(relpose_prior_info); // translation
-
-  // Add prior on relative pose between first two frames
-  graph.push_back(gtsam::BetweenFactor<gtsam::Pose3>(
-                    gtsam::Symbol('x', 0), gtsam::Symbol('x', 1),
-                    T_prior, T_prior_noise));
-
-  // Add values for reference and current frame. init at same pose.
-  initial_estimate.insert(gtsam::Symbol('x', 0), pose_ref);
-  initial_estimate.insert(gtsam::Symbol('x', 1), pose_ref);
-
-  /* TODO(cfo)
-   *
-  // Add values for 3D points. Initialize with random depth.
-  int point_id = 0;
-  for(const FramePtr& frame : frames_ref_->frames_)
+  gtsam::Values initial;
+  auto calibration = boost::make_shared<gtsam::Cal3_S2>(1.0, 1.0, 0.0, 0.0, 0.0);
+  using ProjectionFactor = gtsam::GenericProjectionFactor<gtsam::Pose3, gtsam::Point3, gtsam::Cal3_S2>;
+  const std::array<FrameBundlePtr, 2> bundles{{frames_ref_, frames_cur}};
+  for (size_t bundle_id = 0; bundle_id < bundles.size(); ++bundle_id)
   {
-    for(const FeaturePtr& ftr : frame->fts_)
+    const auto T = bundles[bundle_id]->at(0)->T_world_imu();
+    const gtsam::Pose3 pose(gtsam::Rot3(T.getRotationMatrix()), T.getPosition());
+    const auto pose_key = gtsam::Symbol('x', bundle_id);
+    initial.insert(pose_key, pose);
+    if (bundle_id == 0)
     {
-      double depth = depth_at_current_frame_
-          +vk::Sample::gaussian(depth_at_current_frame_/3.0);
-      Vector3d xyz = frame->T_world_cam()*(ftr->f*depth);
-      initial_estimate.insert(gtsam::Symbol('l', point_id++), gtsam::Point3(xyz));
+      gtsam::Vector6 sigmas;
+      sigmas << 0.0001, 0.0001, 0.0001, 0.00001, 0.00001, 0.00001;
+      graph.emplace_shared<gtsam::PriorFactor<gtsam::Pose3>>(
+          pose_key, pose, gtsam::noiseModel::Diagonal::Sigmas(sigmas));
+    }
+    for (const auto& frame : bundles[bundle_id]->frames_)
+    {
+      const auto extrinsic = frame->T_imu_cam();
+      const gtsam::Pose3 T_body_cam(gtsam::Rot3(extrinsic.getRotationMatrix()),
+                                   extrinsic.getPosition());
+      const auto noise = gtsam::noiseModel::Robust::Create(
+          gtsam::noiseModel::mEstimator::Huber::Create(1.345),
+          gtsam::noiseModel::Isotropic::Sigma(2, 1.0 / frame->getErrorMultiplier()));
+      for (size_t i = 0; i < frame->num_features_; ++i)
+      {
+        const auto& point = frame->landmark_vec_[i];
+        if (!point || frame->f_vec_(2, i) <= 0)
+          continue;
+        const auto key = gtsam::Symbol('l', static_cast<size_t>(point->id()));
+        if (!initial.exists(key))
+          initial.insert(key, gtsam::Point3(point->pos()));
+        graph.emplace_shared<ProjectionFactor>(gtsam::Point2(vk::project2(frame->f_vec_.col(i))),
+            noise, pose_key, key, calibration, T_body_cam);
+      }
     }
   }
-
-  // Add reprojection factors.
-  int point_id_ref = 0;
-  typedef gtsam::GenericProjectionFactor<gtsam::Pose3, gtsam::Point3, gtsam::Cal3_S2> ProjectionFactor;
-  for(const FramePtr& frame : frames_ref_->frames_)
+  const auto optimized = gtsam::LevenbergMarquardtOptimizer(graph, initial).optimize();
+  for (size_t bundle_id = 0; bundle_id < bundles.size(); ++bundle_id)
   {
-    gtsam::Pose3 T_imu_cam(frame->T_imu_cam().getRotationMatrix(),
-                           frame->T_imu_cam().getPosition());
-    for(const FeaturePtr& ftr : frame->fts_)
-    {
-      graph.push_back(
-            ProjectionFactor(
-              gtsam::Point2(vk::project2(ftr->f)), pixel_noise, gtsam::Symbol('x', 0),
-              gtsam::Symbol('l', point_id_ref++), K, T_imu_cam));
-    }
+    const auto pose = optimized.at<gtsam::Pose3>(gtsam::Symbol('x', bundle_id));
+    bundles[bundle_id]->set_T_W_B(Transformation(Quaternion(pose.rotation().toQuaternion()), pose.translation()));
+    for (const auto& frame : bundles[bundle_id]->frames_)
+      for (const auto& point : frame->landmark_vec_)
+        if (point && optimized.exists(gtsam::Symbol('l', static_cast<size_t>(point->id()))))
+          point->pos_ = optimized.at<gtsam::Point3>(gtsam::Symbol('l', static_cast<size_t>(point->id())));
   }
-  int point_id_cur = 0;
-  for(const FramePtr& frame : frames_cur->frames_)
-  {
-    gtsam::Pose3 T_imu_cam(frame->T_imu_cam().getRotationMatrix(),
-                           frame->T_imu_cam().getPosition());
-    for(const FeaturePtr& ftr : frame->fts_)
-    {
-      graph.push_back(
-            ProjectionFactor(
-              gtsam::Point2(vk::project2(ftr->f)), pixel_noise, gtsam::Symbol('x', 1),
-              gtsam::Symbol('l', point_id_cur++), K, T_imu_cam));
-    }
-  }
-  SVO_ASSERT(point_id_cur == point_id_ref,
-             "Initialization: Cur and Ref Bundles don't have same amount of features.");
-  SVO_ASSERT(point_id_cur == point_id,
-             "Initialization: Cur Bundle and Values don't have same amount of features.");
-
-  // solve
-  gtsam::LevenbergMarquardtParams params;
-  params.verbosity = gtsam::LevenbergMarquardtParams::ERROR;
-  gtsam::Values result = gtsam::LevenbergMarquardtOptimizer(graph, initial_estimate, params).optimize();
-  //result.print("Final results:\n");
-  std::cout << "initial error = " << graph.error(initial_estimate) << std::endl;
-  std::cout << "final error = " << graph.error(result) << std::endl;
-
-  gtsam::Pose3 T_ref = result.at<gtsam::Pose3>(gtsam::Symbol('x',0));
-  gtsam::Pose3 T_cur = result.at<gtsam::Pose3>(gtsam::Symbol('x',1));
-
-  T_world_refimu = Transformation(T_ref.rotation().toQuaternion(), T_ref.translation().vector());
-  Transformation T_world_curimu(T_cur.rotation().toQuaternion(), T_cur.translation().vector());
-
-  Transformation T_ref_cur = T_world_refimu.inverse()*T_world_curimu;
-  std::cout << T_ref_cur.inverse() << std::endl;
-
-  for(size_t i=0; i<frames_cur->size(); ++i)
-  {
-    initialization_utils::displayFeatureTracks(frames_cur->at(i), frames_ref_->at(i));
-  }
-  */
   return InitResult::kSuccess;
-
 #else
-  SVO_ERROR_STREAM("You need to compile SVO with GTSAM to use ArrayInitOptimization!");
+  SVO_ERROR_STREAM("Array optimization initialization requires GTSAM.");
   return InitResult::kFailure;
 #endif
 }

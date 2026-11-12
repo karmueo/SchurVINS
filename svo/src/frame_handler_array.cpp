@@ -41,8 +41,6 @@ UpdateResult FrameHandlerArray::processFrameBundle()
     res = processFrame();
   else if(stage_ == Stage::kInitializing)
     res = processSecondFrame();
-  else if(stage_ == Stage::kInitializing)
-    res = processFirstFrame();
 
   return res;
 }
@@ -78,7 +76,7 @@ UpdateResult FrameHandlerArray::processSecondFrame()
 
   if(res == InitResult::kFailure)
     return UpdateResult::kFailure;
-  else if(res == InitResult::kNoKeyframe)
+  else if(res == InitResult::kNoKeyframe || res == InitResult::kTracking)
     return UpdateResult::kDefault;
 
   // make old frame keyframe

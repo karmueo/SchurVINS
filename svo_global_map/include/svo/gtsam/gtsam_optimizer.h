@@ -1,6 +1,7 @@
 #pragma once
 
 #include <memory>
+#include <atomic>
 #include <mutex>
 #include <thread>
 #include <condition_variable>

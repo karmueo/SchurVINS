@@ -74,8 +74,10 @@ UpdateResult FrameHandlerMono::processFirstFrame()
   }
   const auto res = initializer_->addFrameBundle(new_frames_);
 
-  if(res == InitResult::kTracking)
+  if(res == InitResult::kTracking || res == InitResult::kNoKeyframe)
     return UpdateResult::kDefault;
+  if(res == InitResult::kFailure)
+    return UpdateResult::kFailure;
 
   // make old frame keyframe
   initializer_->frames_ref_->setKeyframe();
@@ -84,12 +86,6 @@ UpdateResult FrameHandlerMono::processFirstFrame()
   {
      map_->addKeyframe(initializer_->frames_ref_->at(0),
                        bundle_adjustment_type_==BundleAdjustmentType::kCeres);
-  }
-  else if(bundle_adjustment_type_==BundleAdjustmentType::kGtsam)
-  {
-    CHECK(bundle_adjustment_)
-        << "bundle_adjustment_type_ is kGtsam but bundle_adjustment_ is NULL";
-    bundle_adjustment_->bundleAdjustment(initializer_->frames_ref_);
   }
   else
   {
