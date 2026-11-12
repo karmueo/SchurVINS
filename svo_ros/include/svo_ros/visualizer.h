@@ -12,6 +12,7 @@
 
 #include <utility>  // std::pair
 #include <iostream>
+#include <fstream>
 
 #include <boost/shared_ptr.hpp>
 
@@ -30,6 +31,7 @@
 #include <geometry_msgs/msg/pose_with_covariance_stamped.hpp>
 #include <geometry_msgs/msg/pose_stamped.hpp>
 #include <pcl/point_types.h>
+#include <pcl/point_cloud.h>
 #include <svo/global.h>
 #include <svo/common/types.h>
 #include <nav_msgs/msg/path.hpp>
