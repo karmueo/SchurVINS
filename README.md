@@ -44,31 +44,32 @@ The default estimator is stereo SchurVINS with IMU. Build the separate tradition
 
 ## 3. EGO stereo + IMU
 
-The automated acceptance entry waits for DDS subscriptions, runs playback, checks complete counts, sends `q` after image processing drains, and evaluates the resulting reference trajectory. Use a **new** output path for each run:
-
-```bash
-/usr/bin/python3 ~/schurvins_ws/src/SchurVINS/scripts/accept_ego.py \
-  --bag /data/scl_data/slam/stereo_live_bags/EGO/800hz/job_002.mcap \
-  --calibration /data/scl_data/slam/stereo_live_bags/EGO/800hz/calib.yaml \
-  --output "$HOME/schurvins-results/ego-acceptance-quarter-speed" --rate 0.25 \
-  --reference /data/scl_data/slam/stereo_live_bags/EGO/800hz/output/GT/trajectory_gt_imu.txt
-```
-
-Inspect `acceptance.json`, the unique run's `summary.json`, `frames.csv`, `imu_traj.txt`, and the `reference/` report. Repeat with another new output directory and `--rate 1` for the performance run. These outputs determine the acceptance result; the existence of this command does not imply a passing run.
-
-For manual inspection, run the adapter and estimator using the source calibration, then play only the two source topics in another sourced terminal:
+Process a complete MCAP directly, with no separate `ros2 bag play` command:
 
 ```bash
 ros2 launch svo_ros ego.launch.py \
-  source_calibration:=/data/scl_data/slam/stereo_live_bags/EGO/800hz/calib.yaml \
-  output_dir:="$HOME/schurvins-results/ego-quarter-speed" rviz:=true
+  inbag:=/data/scl_data/slam/stereo_live_bags/EGO/800hz/job_002.mcap \
+  cameras:=/data/scl_data/slam/stereo_live_bags/EGO/800hz/calib.yaml \
+  save_trajectory:=true
 ```
 
-For manual replay, use the reliable QoS override and readiness/drain procedure in the [Jazzy guide](doc/ROS2_JAZZY.md).
+`realtime:=false` (default) processes as fast as possible; `realtime:=true` follows the original recording time at 1× and allows delay without dropping frames. The process prints average VIO FPS, excluding bag IO, JPEG decoding, format conversion, publishing and waits, then exits automatically. `rviz:=true` enables live inspection and closes RViz on completion.
 
-The adapter splits each 3840×1080 JPEG into two 1920×1080 grayscale images, applies the documented IMU timestamp and fixed-bias correction once, and preserves the source files. The launch generates an external calibration with pinhole + equidistant distortion and correct inverse camera/IMU extrinsics. Output goes into a unique run directory under `output_dir`.
+Results default to `./output/result_YYYYMMDDHHMMSS_job_002/`, using Shanghai time. Set `output_dir:=/absolute/path` to write directly into that directory. `schurvins_job_002.mcap` preserves all original topics and adds `/svo/odometry` and `/svo/path_imu`. With `save_trajectory:=true`, `schurvins_job_002_trajectory.txt` contains TUM IMU/body poses (`timestamp tx ty tz qx qy qz qw`, seconds and meters). The default does not save trajectory text. Existing result files are never overwritten.
 
-Wait for subscriptions before replay and for image processing to drain after replay. The complete procedure, expected counts, JSON status topics and reference evaluation are in the [Jazzy guide](doc/ROS2_JAZZY.md). Repeat at `--rate 1.0` for the separate performance run. A successful process exit alone is insufficient for acceptance.
+Run the complete offline acceptance check with a new output directory; add `--realtime` for the separate 1× run:
+
+```bash
+/usr/bin/python3 scripts/accept_ego_offline.py \
+  --bag /data/scl_data/slam/stereo_live_bags/EGO/800hz/job_002.mcap \
+  --calibration /data/scl_data/slam/stereo_live_bags/EGO/800hz/calib.yaml \
+  --output /tmp/schurvins-ego-offline \
+  --reference /data/scl_data/slam/stereo_live_bags/EGO/800hz/output/GT/trajectory_gt_imu.txt
+```
+
+Inspect `acceptance.json`, `summary.json`, `frames.csv`, and the `reference/` report. The check compares every original topic's serialized messages and recording timestamps and verifies odom/Path/TUM consistency. The source EGO reference contains other VIO priors and is not independent ground truth.
+
+Without `inbag`, the launch retains the live topic adapter. It splits each 3840×1080 JPEG into two 1920×1080 grayscale images and applies the existing IMU timestamp and fixed-bias correction once. Calibration conversion preserves the pinhole + equidistant model and inverse camera/IMU extrinsics. Live mode does not create an MCAP; optional text output is named `schurvins_live_trajectory.txt`. The DDS readiness and drain procedure, plus `scripts/accept_ego.py` for external playback acceptance, remain in the [Jazzy guide](doc/ROS2_JAZZY.md).
 
 ## 4. Other inputs and tools
 
