@@ -817,7 +817,17 @@ bool Estimator::applyMarginalizationStrategy(
       {
         ceres_backend::Map::ResidualBlockCollection residuals =
             map_ptr_->residuals(pit->first.asInteger());
-        CHECK(residuals.size() != 0);
+        // A newly registered landmark may have no accepted observation yet.
+        // It contributes no cost or information to marginalization.
+        if (residuals.empty())
+        {
+          if (pit->second.fixed_position)
+            deRegisterFixedLandmark(pit->first.asInteger());
+          map_ptr_->removeParameterBlock(pit->first.asInteger());
+          pit->second.point->in_ba_graph_ = false;
+          pit = landmarks_map_.erase(pit);
+          continue;
+        }
 
         // dealing with fixed landmarks: just delete corresponding residuals
         if (pit->second.fixed_position)

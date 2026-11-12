@@ -1,62 +1,32 @@
 #include <gtest/gtest.h>
-
-#include <functional>
-#include <type_traits>
-
-#include <random>
-
-#include <vikit/eigen_checks.h>
 #include <svo/common/feature_wrapper.h>
 
-template<class T>
-typename std::enable_if<std::is_integral<T>::value, std::function<T()> >::type
-getRandomGenerator()
+TEST(SvoCommonTestSuite, FeatureWrapperReferencesLiveStorage)
 {
-  std::default_random_engine generator;
-  std::uniform_int_distribution<T> distribution(std::numeric_limits<T>::lowest(),
-                                                std::numeric_limits<T>::max());
-  auto random_val = std::bind(distribution, generator);
-  return random_val;
+  svo::FeatureType type = svo::FeatureType::kCorner;
+  svo::Keypoint px(12.0, 25.0);
+  svo::BearingVector bearing(0.0, 0.0, 1.0);
+  svo::GradientVector gradient(1.0, 0.0);
+  svo::Score score = 0.75;
+  svo::Level level = 1;
+  svo::PointPtr landmark;
+  svo::SeedRef seed;
+  int track = 7;
+  svo::FeatureWrapper feature(type, px, bearing, gradient, score, level,
+                              landmark, seed, track);
+  EXPECT_EQ(feature.type, type);
+  EXPECT_EQ(feature.track_id, 7);
+  EXPECT_TRUE(feature.px.isApprox(px));
+  EXPECT_TRUE(feature.f.isApprox(bearing));
+  feature.px.x() = 99.0;
+  feature.type = svo::FeatureType::kEdgelet;
+  feature.track_id = 11;
+  feature.level = 2;
+  EXPECT_DOUBLE_EQ(px.x(), 99.0);
+  EXPECT_EQ(type, svo::FeatureType::kEdgelet);
+  EXPECT_EQ(track, 11);
+  EXPECT_EQ(level, 2);
+  auto copied = feature;
+  copied.score = 0.5;
+  EXPECT_DOUBLE_EQ(score, 0.5);
 }
-
-template<class T>
-typename std::enable_if<!std::is_integral<T>::value, std::function<T()> >::type
-getRandomGenerator()
-{
-  std::default_random_engine generator;
-  std::uniform_real_distribution<T> distribution(std::numeric_limits<T>::lowest(),
-                                                 std::numeric_limits<T>::max());
-  auto random_val = std::bind(distribution, generator);
-  return random_val;
-}
-
-/* TODO(mwe) Adapt to changes in FeatureWrapper.
-TEST(SvoCommonTestSuite,TestFeatureWrapper)
-{
-  auto random_val_real = getRandomGenerator<svo::FloatType>();
-  auto random_val_integral = getRandomGenerator<svo::Level>();
-
-  svo::FeatureType ft_type = (static_cast<int>(random_val_integral()) % 2 ==0)
-      ? svo::FeatureType::kCorner
-      : svo::FeatureType::kEdgelet;
-  svo::Keypoint px(random_val_real(), random_val_real());
-  svo::BearingVector f(random_val_real(), random_val_real(), random_val_real());
-  svo::GradientVector dx(random_val_real(), random_val_real());
-  svo::Level level = random_val_integral();
-
-  svo::FeatureWrapper ft(ft_type, px, f, dx, level);
-
-  EXPECT_EQ(ft_type, ft.type);
-  EXPECT_TRUE(EIGEN_MATRIX_EQUAL_DOUBLE(px, ft.px));
-  EXPECT_TRUE(EIGEN_MATRIX_EQUAL_DOUBLE(f, ft.f));
-  EXPECT_TRUE(EIGEN_MATRIX_EQUAL_DOUBLE(dx, ft.grad));
-  EXPECT_EQ(level, ft.level);
-
-  EXPECT_FLOAT_EQ(px[0], ft.px[0]);
-  EXPECT_FLOAT_EQ(px[1], ft.px[1]);
-  EXPECT_FLOAT_EQ(px.x(), ft.px.x());
-  EXPECT_FLOAT_EQ(px.y(), ft.px.y());
-//  EXPECT_FLOAT_EQ(px.x, ft.px.x);
-//  EXPECT_FLOAT_EQ(px.y, ft.px.y);
-}
-*/

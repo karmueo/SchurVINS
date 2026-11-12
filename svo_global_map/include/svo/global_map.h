@@ -602,7 +602,7 @@ private:
   inline void getKfToPointLink(const FramePtr& f, const int pt_id,
                                VisibilityInfo* v) const
   {
-    const Eigen::Vector3d& kf_pos = f->T_world_imu().getPosition();
+    const Eigen::Vector3d kf_pos = f->T_world_imu().getPosition();
     std::map<int, UniquePointIds>::const_iterator vis_cit =
         frame_id_to_vis_pt_ids_in_graph_map_.find(f->id());
     std::map<int, PointPtr>::const_iterator pt_cit =

@@ -196,10 +196,10 @@ Visualizer::Visualizer(const std::string& trace_dir,
   for (size_t i = 0; i < n_cameras; ++i)
   {
     pub_dense_.at(i) = pnh_.create_publisher<svo_msgs::msg::DenseInputWithFeatures>(
-        "/svo/dense_input/" + std::to_string(i), 2);
-    pub_images_.at(i) = pnh_.create_publisher<sensor_msgs::msg::Image>("/svo/image/" + std::to_string(i), 10);
+        "/svo/dense_input/cam" + std::to_string(i), 2);
+    pub_images_.at(i) = pnh_.create_publisher<sensor_msgs::msg::Image>("/svo/image/cam" + std::to_string(i), 10);
     pub_cam_poses_.at(i) = pnh_.create_publisher<geometry_msgs::msg::PoseStamped>(
-        "/svo/pose_cam/" + std::to_string(i), 10);
+        "/svo/pose_cam/cam" + std::to_string(i), 10);
   }
 
 #ifdef SVO_LOOP_CLOSING

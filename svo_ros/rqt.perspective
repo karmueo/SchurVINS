@@ -37,7 +37,7 @@
                 },
                 "topic": {
                   "type": "repr",
-                  "repr": "'/svo/image/0'"
+                  "repr": "'/svo/image/cam0'"
                 },
                 "zoom1": {
                   "type": "repr",

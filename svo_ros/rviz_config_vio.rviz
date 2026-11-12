@@ -8,7 +8,7 @@ Panels:
         - //svo/points1
         - //svo/points1/Namespaces1
         - //svo/backend_pose_imu_viz1
-        - //svo/image/01
+        - //svo/image/cam01
         - //svo/loop_closures1/Namespaces1
         - //svo/pose_imu1
         - /svo_kfs1
@@ -35,7 +35,7 @@ Panels:
     Experimental: false
     Name: Time
     SyncMode: 0
-    SyncSource: /svo/image/0
+    SyncSource: /svo/image/cam0
 Preferences:
   PromptSaveOnExit: true
 Toolbars:
@@ -104,11 +104,11 @@ Visualization Manager:
       Value: true
     - Class: rviz_default_plugins/Image
       Enabled: true
-      Topic: /svo/image/0
+      Topic: /svo/image/cam0
       Max Value: 1
       Median window: 5
       Min Value: 0
-      Name: /svo/image/0
+      Name: /svo/image/cam0
       Normalize Range: true
       Queue Size: 2
       Transport Hint: raw
@@ -317,7 +317,7 @@ Visualization Manager:
       Value: true
     - Class: rviz_default_plugins/Image
       Enabled: true
-      Topic: /svo/image/1
+      Topic: /svo/image/cam1
       Max Value: 1
       Median window: 5
       Min Value: 0
@@ -376,7 +376,7 @@ Visualization Manager:
       Yaw: 4.9818525314331055
     Saved: ~
 Window Geometry:
-  /svo/image/0:
+  /svo/image/cam0:
     collapsed: false
   Displays:
     collapsed: false

@@ -26,3 +26,5 @@ ros2 topic pub --once /svo/remote_key std_msgs/msg/String '{data: q}'
 ```
 
 RViz2 配置保留图像、位姿、轨迹、关键帧、地图点、回环、PGO 和全局地图显示项。上述资源迁移尚需集成构建、GUI 和数据回放验收；接口示例不表示实机已验证。
+
+ROS2 topic tokens cannot start with digits: per-camera outputs are `/svo/image/cam0`, `/svo/dense_input/cam0`, `/svo/pose_cam/cam0` (and `cam1` etc.).

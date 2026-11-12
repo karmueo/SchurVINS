@@ -491,7 +491,7 @@ InitResult AbstractInitialization::initializeArrayGeometry(
   ransac.probability_ = 0.995;
   if (!ransac.computeModel() || ransac.inliers_.size() < options_.init_min_inliers)
     return InitResult::kNoKeyframe;
-  T_cur_from_ref_ = Transformation(Quaternion(ransac.model_coefficients_.leftCols(3)),
+  T_cur_from_ref_ = Transformation(Quaternion(Eigen::Matrix3d(ransac.model_coefficients_.leftCols(3))),
                                   ransac.model_coefficients_.rightCols(1));
   const Transformation T_cur_world = T_cur_from_ref_ * frames_ref_->at(0)->T_imu_world();
   std::vector<Positions> points(frames_cur->size());

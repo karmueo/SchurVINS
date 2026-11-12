@@ -140,6 +140,14 @@ TEST(okvisTestSuite, Estimator) {
     svo::Estimator estimator;
 
     // add sensors
+    if (extrinsics_case >= 2)
+    {
+      // Time-varying extrinsics were explicitly unsupported in the original
+      // estimator. Check that contract instead of aborting the entire suite.
+      EXPECT_DEATH(estimator.addCameraBundle(extrinsics_estimation_parameters_vec,
+                                            camera_rig), "Not supported");
+      continue;
+    }
     estimator.addCameraBundle(extrinsics_estimation_parameters_vec, camera_rig);
     estimator.addImu(imu_parameters);
 

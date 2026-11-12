@@ -7,4 +7,8 @@ install(DIRECTORY scripts/ DESTINATION share/${PROJECT_NAME}/scripts USE_SOURCE_
 install(DIRECTORY resource/ DESTINATION share/${PROJECT_NAME}/resource USE_SOURCE_PERMISSIONS)
 install(FILES plugin.xml DESTINATION share/${PROJECT_NAME})
 install(PROGRAMS scripts/rqt_svo DESTINATION lib/${PROJECT_NAME})
+if(BUILD_TESTING)
+  find_package(ament_cmake_pytest REQUIRED)
+  ament_add_pytest_test(test_widget test/test_widget.py TIMEOUT 120)
+endif()
 ament_package()

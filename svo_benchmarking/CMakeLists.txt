@@ -36,4 +36,10 @@ install(PROGRAMS
   scripts/reference_report.py
   scripts/ros_node.py
   DESTINATION lib/${PROJECT_NAME})
+if(BUILD_TESTING)
+  find_package(ament_cmake_pytest REQUIRED)
+  ament_add_pytest_test(test_rosbag2_tools test/test_rosbag2_tools.py TIMEOUT 120)
+  ament_add_pytest_test(test_reference_report test/test_reference_report.py TIMEOUT 120)
+endif()
+install(PROGRAMS dataset_tools/prepare_dataset_monocular.sh dataset_tools/prepare_dataset_stereo.sh dataset_tools/generate_ground_truth.sh scripts/analyze_all_euroc.sh DESTINATION lib/${PROJECT_NAME})
 ament_package()

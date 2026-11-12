@@ -30,4 +30,5 @@
   <exec_depend>python3-colorama</exec_depend>
   <exec_depend>rosidl_runtime_py</exec_depend>
   <exec_depend>cv_bridge</exec_depend>
+  <test_depend>ament_cmake_pytest</test_depend>
 </package>

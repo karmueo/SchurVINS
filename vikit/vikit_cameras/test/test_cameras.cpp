@@ -25,7 +25,7 @@ protected:
     const auto fixtures = std::filesystem::temp_directory_path() /
                           ("vikit_cameras_test_" + std::to_string(getpid()));
     std::filesystem::create_directories(fixtures);
-    std::filesystem::copy(source, fixtures, std::filesystem::copy_options::overwrite_existing);
+    std::filesystem::copy(source, fixtures, std::filesystem::copy_options::overwrite_existing | std::filesystem::copy_options::recursive);
     ASSERT_TRUE(cv::imwrite((fixtures / "test_mask.png").string(),
                            cv::Mat(480,752,CV_8UC1,cv::Scalar(255))));
     data_dir_ = fixtures.string();
