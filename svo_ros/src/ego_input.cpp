@@ -34,7 +34,12 @@ EgoInput::EgoInput(const rclcpp::NodeOptions& options) : Node("ego_input", optio
     std_msgs::msg::String msg;
     msg.data = "{\"raw_images\":" + std::to_string(received_images_) +
       ",\"decoded_images\":" + std::to_string(decoded_images_) + ",\"invalid_images\":" + std::to_string(invalid_images_) +
-      ",\"raw_imu\":" + std::to_string(received_imu_) + ",\"published_imu\":" + std::to_string(published_imu_) + "}";
+      ",\"raw_imu\":" + std::to_string(received_imu_) + ",\"published_imu\":" + std::to_string(published_imu_) +
+      ",\"matched_image_publishers\":" + std::to_string(image_sub_->get_publisher_count()) +
+      ",\"matched_imu_publishers\":" + std::to_string(imu_sub_->get_publisher_count()) +
+      ",\"matched_left_subscribers\":" + std::to_string(left_->get_subscription_count()) +
+      ",\"matched_right_subscribers\":" + std::to_string(right_->get_subscription_count()) +
+      ",\"matched_imu_subscribers\":" + std::to_string(corrected_imu_->get_subscription_count()) + "}";
     status_->publish(msg);
   });
 }

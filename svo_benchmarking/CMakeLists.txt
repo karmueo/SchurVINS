@@ -38,6 +38,7 @@ install(PROGRAMS
   DESTINATION lib/${PROJECT_NAME})
 if(BUILD_TESTING)
   find_package(ament_cmake_pytest REQUIRED)
+  ament_add_pytest_test(test_dataset_tools test/test_dataset_tools.py TIMEOUT 120)
   ament_add_pytest_test(test_rosbag2_tools test/test_rosbag2_tools.py TIMEOUT 120)
   ament_add_pytest_test(test_reference_report test/test_reference_report.py TIMEOUT 120)
 endif()

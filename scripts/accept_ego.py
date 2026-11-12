@@ -13,6 +13,7 @@ import numpy as np
 import rclpy
 from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy
 from std_msgs.msg import String
+from rosbag2_interfaces.srv import Resume
 
 
 def stop(process):
@@ -73,20 +74,36 @@ def main():
         while not (status['svo'] and status['ego'] and all(node.count_subscribers(t) >= 1 for t in topics)):
             spin()
         playback = subprocess.Popen(['ros2', 'bag', 'play', args.bag, '--rate', str(args.rate),
-                     '--clock', '--start-offset', '0', '--disable-keyboard-controls',
+                     '--clock', '--start-offset', '0', '--start-paused', '--disable-keyboard-controls',
                      '--wait-for-all-acked', '30', '--qos-profile-overrides-path', str(qos_file),
                      '--topics', '/stereo/image_raw', '/imu'],
                      stdout=playback_log, stderr=subprocess.STDOUT, start_new_session=True)
+        # Graph discovery alone does not mean DDS writers/readers have matched.
+        # Keep the bag paused until both adapter inputs and all three outputs match.
+        resume = node.create_client(Resume, '/rosbag2_player/resume')
+        matches = ['matched_image_publishers', 'matched_imu_publishers',
+                   'matched_left_subscribers', 'matched_right_subscribers', 'matched_imu_subscribers']
+        while not (resume.service_is_ready() and all(status['ego'].get(key, 0) > 0 for key in matches)):
+            if playback.poll() is not None:
+                raise RuntimeError(f'Playback exited before DDS readiness: {playback.returncode}')
+            spin()
+        resumed = resume.call_async(Resume.Request())
+        while not resumed.done():
+            spin()
+        resumed.result()
         while playback.poll() is None:
             spin()
         if playback.returncode:
             raise RuntimeError(f'Playback failed: {playback.returncode}')
+        drain_deadline = time.monotonic() + 120
         while not (status['ego'].get('raw_images') == args.images and
                    status['ego'].get('raw_imu') == args.imu and
                    status['svo'].get('image_groups') == args.images and
                    status['svo'].get('imu_received') == args.imu and
                    status['svo'].get('pending_images') == 0 and
                    not status['svo'].get('inflight', True)):
+            if time.monotonic() > drain_deadline:
+                raise RuntimeError(f'Inputs did not drain to expected counts: {status}')
             spin()
         while not status['svo'].get('stopped'):
             control.publish(String(data='q'))
@@ -100,6 +117,7 @@ def main():
             'decoded_images': status['ego']['decoded_images'] == args.images,
             'invalid_images': status['ego']['invalid_images'] == 0,
             'published_imu': status['ego']['published_imu'] == args.imu,
+            'image_messages': summary['image_messages'] == 2 * args.images,
             'paired_images': summary['image_groups'] == args.images,
             'leading_skipped': summary['leading_skipped'] == args.leading,
             'processed_once': summary['processed'] == expected,
@@ -126,7 +144,8 @@ def main():
             outcome['reference'] = report(run_dir / 'imu_traj.txt', args.reference, args.output / 'reference')
         if not outcome['passed']:
             raise RuntimeError(f'Failed integrity checks: {[key for key,value in checks.items() if not value]}')
-    except Exception as error:
+    except BaseException as error:
+        outcome['passed'] = False
         outcome['error'] = str(error)
         raise
     finally:
