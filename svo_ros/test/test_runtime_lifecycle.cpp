@@ -29,8 +29,13 @@ TEST(RuntimeLifecycle, ReadOnlyResetAndComponentExit)
   auto control = observer->create_publisher<std_msgs::msg::String>("/svo/remote_key", 10);
   rclcpp::executors::MultiThreadedExecutor executor(rclcpp::ExecutorOptions(), 3);
   executor.add_node(component); executor.add_node(observer);
+  bool reset_sent = false;
+  auto ready = observer->create_wall_timer(std::chrono::milliseconds(10), [&] {
+    if (!reset_sent && control->get_subscription_count())
+    { reset_sent = true; std_msgs::msg::String message; message.data = "r"; control->publish(message); }
+  });
   std::thread spin([&] { executor.spin(); });
-  std_msgs::msg::String command; command.data = "r"; control->publish(command);
+  std_msgs::msg::String command;
   const bool reset = reset_seen.get_future().wait_for(std::chrono::seconds(10)) == std::future_status::ready;
   EXPECT_TRUE(reset);
   command.data = "q"; control->publish(command);
