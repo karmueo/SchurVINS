@@ -5,6 +5,10 @@ import os
 import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
+class MapIOError(OSError):
+  """A depth map has an unsupported format or unexpected size."""
+
+
 def load_depthmap(depthmap_full_file_path, depthmap_rows, depthmap_cols,
                   fileformat=np.float32, is_megapov_depthmap = 0):
   depth_array = []
@@ -34,7 +38,8 @@ def load_povray_depthmap(depthmap_full_file_path, rows, cols,
                          scale_factor = 1.0, is_megapov_depthmap = 0):
   depth_array = []
   try:
-    depth_array = load_depthmap(depthmap_full_file_path, rows, cols, is_megapov_depthmap)
+    depth_array = load_depthmap(depthmap_full_file_path, rows, cols,
+                                is_megapov_depthmap=is_megapov_depthmap)
   except IOError:
     raise
   except MapIOError:

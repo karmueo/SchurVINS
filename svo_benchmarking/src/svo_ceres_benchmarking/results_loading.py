@@ -6,6 +6,10 @@ import yaml
 import numpy as np
 
 
+def _load_rows(*args, **kwargs):
+    return np.atleast_2d(np.loadtxt(*args, **kwargs))
+
+
 def get_num_monte_carlo(trace_dir):
     exp_param_fn = os.path.join(trace_dir, "experiment.yaml")
     assert os.path.exists(exp_param_fn),\
@@ -41,10 +45,10 @@ def load_traj_est(results_dir, mc_idx=None):
     print(('loading trajectory estimate in '+results_dir))
 
     if mc_idx is not None:
-        data_es = np.loadtxt(
+        data_es = _load_rows(
             os.path.join(results_dir, 'traj_estimate' + str(mc_idx) + '.txt'))
     else:
-        data_es = np.loadtxt(os.path.join(results_dir, 'traj_estimate.txt'))
+        data_es = _load_rows(os.path.join(results_dir, 'traj_estimate.txt'))
     assert data_es.shape[1] == 9
 
     es_id = []
@@ -68,11 +72,11 @@ def load_speed_bias_estimate(results_dir, mc_idx=None):
     '''
     print(("loading speed and bias estimate in " + results_dir))
     if mc_idx is not None:
-        data_es = np.loadtxt(
+        data_es = _load_rows(
             os.path.join(results_dir, 'speed_bias_estimate' +
                          str(mc_idx) + '.txt'))
     else:
-        data_es = np.loadtxt(os.path.join(results_dir,
+        data_es = _load_rows(os.path.join(results_dir,
                                           'speed_bias_estimate.txt'))
     assert data_es.shape[1] == 11
 
@@ -131,13 +135,13 @@ def load_traj_est_gt_matched(results_dir, mc_idx=None):
     print(('loading matched trajectory and groundtruth in '+results_dir))
 
     if mc_idx is not None:
-        data_es = np.loadtxt(
+        data_es = _load_rows(
             os.path.join(results_dir, 'traj_estimate' + str(mc_idx) + '.txt'))
     else:
-        data_es = np.loadtxt(os.path.join(results_dir, 'traj_estimate.txt'))
-    data_gt = np.loadtxt(os.path.join(results_dir, 'groundtruth.txt'))
+        data_es = _load_rows(os.path.join(results_dir, 'traj_estimate.txt'))
+    data_gt = _load_rows(os.path.join(results_dir, 'groundtruth.txt'))
     data_gt = dict([(int(row[0]), row[1:]) for row in data_gt])
-    matches = np.loadtxt(os.path.join(results_dir, 'groundtruth_matches.txt'))
+    matches = _load_rows(os.path.join(results_dir, 'groundtruth_matches.txt'))
     matches = dict([(int(row[0]), int(row[1])) for row in matches])
     p_es = []
     p_gt = []

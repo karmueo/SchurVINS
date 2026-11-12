@@ -36,6 +36,10 @@ def report(estimate_path, reference_path, output, tolerance=0.01):
         if np.any(np.diff(values[:, 0]) <= 0):
             raise ValueError(f'{name} timestamps must be strictly increasing')
     pairs = associate(estimate, reference, tolerance)
+    if len(pairs):
+        overlapping = ((estimate[pairs[:, 0], 0] >= reference[0, 0]) &
+                       (estimate[pairs[:, 0], 0] <= reference[-1, 0]))
+        pairs = pairs[overlapping]
     if len(pairs) < 3:
         raise ValueError('Fewer than three associated poses')
     est, ref = estimate[pairs[:, 0]], reference[pairs[:, 1]]
@@ -65,13 +69,15 @@ def report(estimate_path, reference_path, output, tolerance=0.01):
         rpe_translation.append(np.linalg.norm(te - tr))
         rpe_rotation.append(Rotation.from_matrix(dr.T @ de).magnitude())
     rmse = lambda v: float(np.sqrt(np.mean(np.square(v)))) if len(v) else None
+    overlap_count = int(np.count_nonzero((estimate[:, 0] >= reference[0, 0]) &
+                                         (estimate[:, 0] <= reference[-1, 0])))
     summary = {
         'reference_warning': 'Reference includes other VIO priors; it is not independent ground truth.',
         'alignment': 'SE(3), scale fixed to 1', 'time_tolerance_seconds': tolerance,
         'associated_poses': len(pairs), 'estimate_poses': len(estimate),
         'reference_poses': len(reference), 'association_coverage': len(pairs) / len(estimate),
-        'overlap_estimate_poses': int(np.count_nonzero((estimate[:, 0] >= reference[0, 0]) &
-                                                       (estimate[:, 0] <= reference[-1, 0]))),
+        'overlap_estimate_poses': overlap_count,
+        'association_coverage_overlapping_estimate': len(pairs) / overlap_count if overlap_count else 0.0,
         'overlap_start': float(est[0, 0]), 'overlap_end': float(est[-1, 0]),
         'ate_position_rmse_m': rmse(np.linalg.norm(aligned - rx, axis=1)),
         'rpe_interval_seconds': 1.0, 'rpe_pairs': len(rpe_translation),

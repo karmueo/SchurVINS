@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import numpy as np
+from pathlib import Path
 from scipy.stats import beta
 from scipy.stats import norm
 import matplotlib.pyplot as plt
@@ -67,7 +68,7 @@ def plot_gaussian(ax, mu_sigma2, z_min, z_max):
     ax.plot(x, y, lw=2.5, color='b')
     ax.set_xlim([z_min, z_max])
 
-def experiment_1(inlier_prob = 0.7):
+def experiment_1(inlier_prob=0.7, output_dir='.'):
     # init state
     z_max = 1.0/0.5
     z_min = 0.0
@@ -114,7 +115,7 @@ def experiment_1(inlier_prob = 0.7):
             plot_distribution_vogiatzis(axes_vec[0][2], mu_sigma2_a_b, Z, RHO)
             plot_gaussian(axes_vec[0][1], mu_sigma2, z_min, z_max)
             plot_histogram(axes_vec[0][0], z_meas_vec, z_min, z_max)
-        if(i == N/2):
+        if(i == N//2):
             plot_distribution_vogiatzis(axes_vec[1][2], mu_sigma2_a_b, Z, RHO)
             plot_gaussian(axes_vec[1][1], mu_sigma2, z_min, z_max)
             plot_histogram(axes_vec[1][0], z_meas_vec, z_min, z_max)
@@ -156,18 +157,24 @@ def experiment_1(inlier_prob = 0.7):
 
 
     format_axes(axes_vec[0], 3)
-    format_axes(axes_vec[1], N/2)
+    format_axes(axes_vec[1], N//2)
     format_axes(axes_vec[2], N)
 
     fig1.tight_layout()
-    fig1.savefig('depth_estimation_1.pdf')
+    fig1.savefig(str(Path(output_dir) / 'depth_estimation_1.pdf'))
     fig2.tight_layout()
-    fig2.savefig('depth_estimation_2.pdf')
+    fig2.savefig(str(Path(output_dir) / 'depth_estimation_2.pdf'))
     fig3.tight_layout()
-    fig3.savefig('depth_estimation_3.pdf')
+    fig3.savefig(str(Path(output_dir) / 'depth_estimation_3.pdf'))
 
     print(('error vogiatzis = ' + str(np.abs(mu_sigma2_a_b[0]-z_true))))
     print(('error gaussian = ' + str(np.abs(mu_sigma2[0]-z_true))))
 
 
-experiment_1(0.7)
+if __name__ == '__main__':
+    import argparse
+    parser = argparse.ArgumentParser(description='Illustrative depth-filter simulation')
+    parser.add_argument('--output-dir', default='.')
+    args = parser.parse_args()
+    Path(args.output_dir).mkdir(parents=True, exist_ok=True)
+    experiment_1(0.7, args.output_dir)

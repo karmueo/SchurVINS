@@ -9,8 +9,8 @@ import matplotlib.pyplot as plt
 from matplotlib import rc
 from colorama import init, Fore
 
-import svo_benchmarking.transformations as tfs
-import svo_benchmarking.dataset_loading as data_load
+import svo_ceres_benchmarking.transformations as tfs
+import svo_ceres_benchmarking.dataset_loading as data_load
 
 rc('font', **{'family': 'serif', 'serif': ['Cardo']})
 rc('text', usetex=False)

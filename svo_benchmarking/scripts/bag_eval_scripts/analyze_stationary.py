@@ -3,6 +3,8 @@
 
 
 from svo_ceres_benchmarking.rosbag2_io import read_messages, stamp_seconds, stamp_ns
+from svo_ceres_benchmarking.data_export import pose_values
+from pathlib import Path
 import argparse
 import os
 import numpy as np
@@ -16,7 +18,9 @@ if __name__ == '__main__':
     parser.add_argument('start', type=float, help='percentage of starting point')
     parser.add_argument('end', type=float, help='percentage of end point')
 
+    parser.add_argument('--output-dir', default='.', help='Writable report directory')
     args = parser.parse_args()
+    Path(args.output_dir).mkdir(parents=True, exist_ok=True)
 
     assert args.start > 0.0 and args.start < 1.0
     assert args.end > 0.0 and args.end < 1.0
@@ -48,13 +52,14 @@ if __name__ == '__main__':
         seq_i = stamp_ns(msg_i.header.stamp)
         assert seq_i > prev_seq, "{0} vs {1}".format(seq_i, prev_seq)
         prev_seq = seq_i
-        pos_i = pose_msgs[i].pose.pose.position
-        positions.append([pos_i.x, pos_i.y, pos_i.z])
+        positions.append(pose_values(msg_i)[:3])
         times.append(stamp_seconds(msg_i.header.stamp))
 
     static_pos = np.array(positions[n_start:n_end])
     static_times = np.array(times[n_start:n_end])
     n_static = static_pos.shape[0]
+    if n_static < 2:
+        raise ValueError('At least two selected poses are required for stationary statistics')
     print(("Extracted {0} static positions.".format(n_static)))
 
     # calculate statistics
@@ -94,7 +99,8 @@ if __name__ == '__main__':
     ax.legend()
 
     plt.tight_layout()
-    fig.savefig(save_prefix+'xyz' + '.pdf')
+    fig.savefig(str(Path(args.output_dir) / (save_prefix + 'xyz.pdf')))
+    plt.close(fig)
 
     # plt.show()
 

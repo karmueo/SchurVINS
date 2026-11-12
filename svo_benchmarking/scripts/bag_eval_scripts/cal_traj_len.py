@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 from svo_ceres_benchmarking.rosbag2_io import read_messages, stamp_seconds, stamp_ns
+from svo_ceres_benchmarking.data_export import pose_values
 import argparse
 import os
 import numpy as np
@@ -18,8 +19,7 @@ def calGTLengthFromBag(bag_fn, gt_topic):
         seq_i = stamp_ns(msg_i.header.stamp)
         assert seq_i > prev_seq
         prev_seq = seq_i
-        pos_i = msg_i.pose.position
-        gt_positions.append([pos_i.x, pos_i.y, pos_i.z])
+        gt_positions.append(pose_values(msg_i)[:3])
     assert len(gt_positions) > 0, "Found no groundtruth messages."
 
     gt_positions = np.array(gt_positions)
@@ -41,7 +41,8 @@ if __name__ == '__main__':
 
     print(("Going to analyze bags under {0} for groundtruth topic {1}.".format(args.dir, args.gt_topic)))
 
-    bag_fns = [x for x in os.listdir(args.dir) if x.endswith(('.mcap', '.db3'))]
+    bag_fns = [x for x in os.listdir(args.dir) if x.endswith(('.mcap', '.db3'))
+               or os.path.isfile(os.path.join(args.dir, x, 'metadata.yaml'))]
     bag_fns.sort()
     bag_fullfns = [os.path.join(args.dir, v) for v in bag_fns]
     print(("Found bag files {0}.".format(bag_fullfns)))

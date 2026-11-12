@@ -26,7 +26,7 @@ if __name__ == '__main__':
     org_content = []
     with open(args.org_img_list) as f:
         org_content = f.readlines()
-    org_content = [x.strip().split(' ') for x in org_content]
+    org_content = [x.split() for x in org_content if x.strip()]
     print(("Found {0} data".format(len(org_content))))
 
     changed_content = []
@@ -34,8 +34,8 @@ if __name__ == '__main__':
     for l in org_content:
         if l[0].startswith('#'):
             continue
-        old_fn = os.path.basename(l[-1])
-        l[-1] = os.path.join(args.new_path, old_fn)
+        for column in range(2, len(l)):
+            l[column] = os.path.join(args.new_path, os.path.basename(l[column]))
         changed_content.append(l)
 
     changed_content = [' '.join(x) + '\n' for x in changed_content]

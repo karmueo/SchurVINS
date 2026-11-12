@@ -4,6 +4,10 @@ import os
 import numpy as np
 
 
+def _load_rows(*args, **kwargs):
+    return np.atleast_2d(np.loadtxt(*args, **kwargs))
+
+
 def load_imu_meas(trace_dir, fn='imu.txt'):
     abs_fn = os.path.join(trace_dir, fn)
     assert os.path.exists(abs_fn), "{0} does not exist.".format(abs_fn)
@@ -13,7 +17,7 @@ def load_imu_meas(trace_dir, fn='imu.txt'):
     gyr_meas = []
     acc_meas = []
 
-    imu_data = np.loadtxt(abs_fn)
+    imu_data = _load_rows(abs_fn)
     assert imu_data.shape[1] == 8, "Wrong data format."
     for row in imu_data:
         imu_id.append(int(row[0]))
