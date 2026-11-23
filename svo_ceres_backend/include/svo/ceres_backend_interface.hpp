@@ -161,6 +161,7 @@ public:
   /**
    * @brief Stop and join ceres optimization thread.
    */
+  bool finishPending(double timeout_seconds);
   void quitThread() override;
 
   // set correction transformation to be applied

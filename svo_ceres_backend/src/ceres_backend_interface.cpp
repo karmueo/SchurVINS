@@ -563,6 +563,21 @@ void CeresBackendInterface::startThread()
       new std::thread(&CeresBackendInterface::optimizationLoop, this));
 }
 
+bool CeresBackendInterface::finishPending(double timeout_seconds)
+{
+  const auto deadline = std::chrono::steady_clock::now() +
+      std::chrono::duration<double>(timeout_seconds);
+  do
+  {
+    std::unique_lock<std::mutex> lock(mutex_backend_, std::try_to_lock);
+    if (lock.owns_lock() && last_added_nframe_images_ == last_optimized_nframe_.load())
+      return true;
+    if (lock.owns_lock()) lock.unlock();
+    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+  } while (std::chrono::steady_clock::now() < deadline);
+  return false;
+}
+
 void CeresBackendInterface::quitThread()
 {
   VLOG(1) << "Interrupting and stopping optimization thread.";

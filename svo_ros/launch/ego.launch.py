@@ -39,7 +39,10 @@ def setup(context):
     helpers['check_outputs'](output, bag_name, bool(inbag), save_trajectory)
     generated = Path(tempfile.mkdtemp(prefix='ego_calibration_', dir=output)) / 'calibration.yaml'
     runpy.run_path(str(share / 'scripts' / 'ego_calibration.py'))['convert'](cameras, generated)
-    parameters = [str(share / 'param' / 'vio_stereo.yaml'), {
+    params = Path(value('params')).expanduser().resolve()
+    if not params.is_file():
+        raise FileNotFoundError(f'Parameter file does not exist: {params}')
+    parameters = [str(params), {
         'calib_file': str(generated), 'output_dir': str(output),
         'pipeline': 'stereo', 'use_sim_time': True,
         'save_trajectory': save_trajectory,
@@ -70,6 +73,7 @@ def setup(context):
 
 def generate_launch_description():
     return LaunchDescription([
+        DeclareLaunchArgument('params', default_value=str(Path(get_package_share_directory('svo_ros')) / 'param' / 'vio_stereo.yaml')),
         DeclareLaunchArgument('inbag', default_value=''),
         DeclareLaunchArgument('save_trajectory', default_value='false'),
         DeclareLaunchArgument('realtime', default_value='false'),

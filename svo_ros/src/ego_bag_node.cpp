@@ -5,6 +5,10 @@
 #include <svo_ros/svo_interface.h>
 #include <svo_ros/visualizer.h>
 #include <svo/frame_handler_base.h>
+#include <svo/ceres_backend_interface.hpp>
+#ifdef SVO_LOOP_CLOSING
+#include <svo/online_loopclosing/loop_closing.h>
+#endif
 #include <svo/common/frame.h>
 #include <svo/imu_handler.h>
 #include <vikit/params_helper.h>
@@ -119,6 +123,25 @@ public:
       if (scheduler_.pendingImages() || scheduler_.pendingImu())
         throw std::runtime_error("Unpaired images or missing final IMU coverage at EOF");
       if (!processed_ || !poses_) throw std::runtime_error("MCAP processing never entered tracking");
+      if (interface_->ceres_backend_interface_ && !interface_->ceres_backend_interface_->finishPending(30.0))
+        throw std::runtime_error("Ceres backend did not finish within 30 seconds");
+#ifdef SVO_LOOP_CLOSING
+      if (interface_->svo_->lc_)
+      {
+        auto lc = interface_->svo_->lc_;
+        if (!lc->finishPending(30.0)) throw std::runtime_error("Loop/PGO tasks did not finish within 30 seconds");
+        if (lc->pgo_ && !lc->tracePoseGraph((output_/"pgo_trajectory.txt").string()))
+          throw std::runtime_error("Cannot export PGO trajectory");
+        if (!lc->traceClosedLoops(output_.string(), ""))
+          throw std::runtime_error("Cannot export closed loops");
+        std::ofstream stats(output_/"loop_summary.json");
+        stats << "{\"detected\":" << lc->lc_closed_loops_.size()
+              << ",\"corrections_applied\":" << lc->corrections_applied_
+              << ",\"pgo_completed\":" << lc->pgo_completed_ << "}";
+        stats.close();
+        if (!stats) throw std::runtime_error("Cannot write loop summary");
+      }
+#endif
       complete = true;
     }
     catch (const std::exception& exception)
