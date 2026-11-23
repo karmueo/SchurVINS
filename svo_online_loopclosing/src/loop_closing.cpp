@@ -71,6 +71,28 @@ LoopClosing::LoopClosing(const LoopClosureOptions& loopclosure_options,
 
 LoopClosing::~LoopClosing()
 {
+  if (pr_future_.valid()) pr_future_.wait();
+  if (pgo_future_.valid()) pgo_future_.wait();
+}
+
+bool LoopClosing::finishPending(double timeout_seconds)
+{
+  const auto deadline = std::chrono::steady_clock::now() +
+      std::chrono::duration_cast<std::chrono::steady_clock::duration>(std::chrono::duration<double>(timeout_seconds));
+  if (pr_future_.valid())
+  {
+    if (pr_future_.wait_until(deadline) != std::future_status::ready)
+      return false;
+    pr_future_.get();
+  }
+
+  do
+  {
+    advancePoseGraph();
+    if (!pgo_future_.valid())
+      return true;
+  } while (pgo_future_.wait_until(deadline) == std::future_status::ready);
+  return false;
 }
 
 void LoopClosing::runPROnLatestKeyframe(const size_t n_ignored_latest,
@@ -117,7 +139,7 @@ void LoopClosing::runPROnLatestKeyframe(const size_t n_ignored_latest,
     if (suspended_frames_counter_ < static_cast<int>(options_.alpha * 20 + 5))
     {
       VLOG(40) << "********** Loop Closing Suspended *********";
-      completed_flags_.back() = true;
+      completed_flags_.back()->store(true);
       return;
     }
     else
@@ -136,7 +158,7 @@ void LoopClosing::runPROnLatestKeyframe(const size_t n_ignored_latest,
   if (static_cast<size_t>(lc_frame_count_) <= n_ignored_latest ||
       !run_lc_on_this_frame)
   {
-    completed_flags_.back() = true;
+    completed_flags_.back()->store(true);
     return;
   }
 
@@ -485,7 +507,7 @@ void LoopClosing::runPROnLatestKeyframe(const size_t n_ignored_latest,
     break;
   }
 
-  completed_flags_.back() = true;
+  completed_flags_.back()->store(true);
   VLOG(40) << "<<< Total Time Taken for processing keyframe "
            << cur_kf->NframeID_ << " " << timer_total.stop()
            << "s and query count " << num_queries_.back();
@@ -493,10 +515,11 @@ void LoopClosing::runPROnLatestKeyframe(const size_t n_ignored_latest,
 
 void LoopClosing::addFrameToPR(const svo::FrameBundlePtr& last_frames_)
 {
-  if (completed_flags_.size() > 1 && !completed_flags_.back())
+  if (!lastFinished())
   {
     return;
   }
+  advancePoseGraph();
   svo_keyframe_count_++;
   const cv::Mat current_frame_image = last_frames_->frames_[0]->img();
 
@@ -528,18 +551,16 @@ void LoopClosing::addFrameToPR(const svo::FrameBundlePtr& last_frames_)
     kf_list_.push_back(cur_kf);
 
     double score_expected = 1;
-    completed_flags_.push_back(false);
-    this->threads_.push_back(
-        thread(&LoopClosing::runPROnLatestKeyframe, this,
+    completed_flags_.push_back(std::make_shared<std::atomic_bool>(false));
+    pr_future_ = std::async(std::launch::async, &LoopClosing::runPROnLatestKeyframe, this,
                static_cast<size_t>(options_.ignored_past_frames),
-               run_lc_on_this_frame, score_expected));
-    this->threads_.back().detach();
+               run_lc_on_this_frame, score_expected);
     last_added_frame_trackIDs_ = cur_kf->svo_trackIDsvector_;
     last_run_lc_frame_trackIDs_ = cur_kf->svo_trackIDsvector_;
   }
   else
   {
-    if (completed_flags_.back() == true)
+    if (lastFinished())
     {
       std::shared_ptr<KeyFrame> cur_kf =
           std::make_shared<KeyFrame>(last_frames_->getBundleId());
@@ -580,13 +601,11 @@ void LoopClosing::addFrameToPR(const svo::FrameBundlePtr& last_frames_)
         prox_dist_thresh_ =
             options_.proximity_dist_ratio * cumulative_distance_ +
             options_.proximity_offset;
-        completed_flags_.push_back(false);
-        this->threads_.pop_back();
-        this->threads_.push_back(thread(&LoopClosing::runPROnLatestKeyframe,
+        completed_flags_.push_back(std::make_shared<std::atomic_bool>(false));
+        pr_future_ = std::async(std::launch::async, &LoopClosing::runPROnLatestKeyframe,
                                         this,
                                         std::ref(options_.ignored_past_frames),
-                                        run_lc_on_this_frame, score_expected));
-        this->threads_.back().detach();
+                                        run_lc_on_this_frame, score_expected);
       }
     }
     else
@@ -650,84 +669,79 @@ void LoopClosing::extractAndConvert(
 
 void LoopClosing::updateKeyframe(const svo::FramePtr& frame)
 {
-  if (kf_list_.size() == 0)
-  {
-    return;
-  }
-
-  int res = findKfIndexByNFrameID(frame->bundleId());
+  const int res = findKfIndexByNFrameID(frame->bundleId());
   if (res != -1)
   {
-    size_t kf_idx = static_cast<size_t>(res);
-    const KeyFramePtr& found_kf = kf_list_[kf_idx];
-    if (!completed_flags_[found_kf->lc_frame_count_ - 1])
+    const size_t kf_idx = static_cast<size_t>(res);
+    if (completed_flags_[kf_idx]->load())
     {
-      return;
-    }
-
-    found_kf->skip_frame_ = !frame->is_stable_;
-
-    // update the database with the latest optimized results
-    this->svoFrameToKeyframe(frame, found_kf.get());
-    updateSVOPointsDescriptors(kf_idx, true);
-    found_kf->keyframe_image_.release();
-
-    if (global_map_type_ == GlobalMapType::kBuiltInPoseGraph)
-    {
-      CHECK(pgo_);
-      // we need to add the sequential constraint using uncorrected pose
-      // also the map points need to be consistent with the pose
-      Transformation corrected_T_w_c = found_kf->T_w_c_;
-      Transformation uncorrected_T_w_c =
-          frame->accumulated_w_T_correction_.inverse() * found_kf->T_w_c_;
-      found_kf->T_w_c_ = uncorrected_T_w_c;
-      pgo_->addPoseToPgoProblem(found_kf->T_w_c_, found_kf->NframeID_);
-      /* Add Sequential Constraint to Pose Graph */
-      if (kf_idx > 0)
+      const KeyFramePtr& found_kf = kf_list_[kf_idx];
+      found_kf->skip_frame_ = !frame->is_stable_;
+      svoFrameToKeyframe(frame, found_kf.get());
+      updateSVOPointsDescriptors(kf_idx, true);
+      found_kf->keyframe_image_.release();
+      if (pgo_)
       {
-        int id_prev = kf_list_[kf_idx - 1]->NframeID_;
-        Transformation t_be =
-            kf_list_[kf_idx - 1]->T_w_c_.inverse() * uncorrected_T_w_c;
-        pgo_->addSequentialConstraintToPgoProblem(t_be, id_prev,
-                                                  found_kf->NframeID_);
-
-        /* If this frame has a loop closure then add a loop constraint and
-         * optimize the pose graph in a separate
-         * thread.*/
-        auto search = cur_kf_to_lc_kf_bundle_id_map_.find(found_kf->NframeID_);
-        if (search != cur_kf_to_lc_kf_bundle_id_map_.end())
-        {
-          int current_frame_id = search->first;
-          int lc_frame_id = search->second;
-          int lc_kf_idx = findKfIndexByNFrameID(lc_frame_id);
-          CHECK_GE(lc_kf_idx, -1);
-          // now we need to add the corrrect relative pose
-          Transformation t_be_lc =
-              kf_list_[static_cast<size_t>(lc_kf_idx)]->T_w_c_.inverse() *
-              corrected_T_w_c;
-          if (!pgo_->has_updated_result_)
-          {
-            std::thread pgo_thread(&Pgo::addLoopConstraintToPgoProblem, pgo_,
-                                   t_be_lc, lc_frame_id, current_frame_id);
-            pgo_thread.detach();
-            last_pgo_id_ = current_frame_id;
-          }
-        }
+        const Transformation corrected_pose = found_kf->T_w_c_;
+        found_kf->T_w_c_ = frame->accumulated_w_T_correction_.inverse() * corrected_pose;
+        pending_pose_graph_frames_.push_back({kf_idx, found_kf->T_w_c_, corrected_pose});
       }
-    }  // pose graph optimization
+    }
+  }
+  advancePoseGraph();
+}
+
+void LoopClosing::advancePoseGraph()
+{
+  // Place recognition reads the keyframe poses and writes the loop matches.
+  if (!pgo_ || !lastFinished())
+    return;
+
+  if (pgo_future_.valid())
+  {
+    if (pgo_future_.wait_for(std::chrono::seconds(0)) != std::future_status::ready)
+      return;
+    pgo_future_.get();
+    if (pgo_->has_updated_result_)
+    {
+      vk::Timer timer;
+      timer.start();
+      updateDatabaseFromPG();
+      refreshCeresPgoProblem();
+      pgo_->has_updated_result_ = false;
+      need_to_update_pose_graph_viz_ = true;
+      ++pgo_completed_;
+      VLOG(40) << "%%%%% Time taken for posegraph update " << timer.stop();
+    }
   }
 
-  if (pgo_ && pgo_->has_updated_result_)
+  while (!pending_pose_graph_frames_.empty())
   {
-    vk::Timer t;
-    t.start();
-    updateDatabaseFromPG();
-    refreshCeresPgoProblem();
-    last_pgo_id_ = std::numeric_limits<int>::max();
-    pgo_->has_updated_result_ = false;
-    need_to_update_pose_graph_viz_ = true;
-    double time = t.stop();
-    VLOG(40) << "%%%%% Time taken for posegraph update " << time;
+    const auto pending = pending_pose_graph_frames_.front();
+    pending_pose_graph_frames_.pop_front();
+    const size_t kf_idx = pending.keyframe_index;
+    const int frame_id = kf_list_[kf_idx]->NframeID_;
+    kf_list_[kf_idx]->T_w_c_ = pending.uncorrected_pose;
+    pgo_->addPoseToPgoProblem(pending.uncorrected_pose, frame_id);
+    if (kf_idx == 0)
+      continue;
+
+    const auto& previous = kf_list_[kf_idx - 1];
+    pgo_->addSequentialConstraintToPgoProblem(
+        previous->T_w_c_.inverse() * pending.uncorrected_pose, previous->NframeID_, frame_id);
+
+    const auto match = cur_kf_to_lc_kf_bundle_id_map_.find(frame_id);
+    if (match == cur_kf_to_lc_kf_bundle_id_map_.end())
+      continue;
+    const int loop_frame_id = match->second;
+    const int loop_index = findKfIndexByNFrameID(loop_frame_id);
+    CHECK_GE(loop_index, 0);
+    const Transformation relative_pose =
+        kf_list_[static_cast<size_t>(loop_index)]->T_w_c_.inverse() * pending.corrected_pose;
+    pgo_future_ = std::async(std::launch::async, &Pgo::addLoopConstraintToPgoProblem,
+                             pgo_, relative_pose, loop_frame_id, frame_id);
+    last_pgo_id_ = frame_id;
+    return;
   }
 }
 
@@ -883,6 +897,10 @@ void LoopClosing::updateKeyframePoses(const BundleIdToTwb& pose_map)
 
 bool LoopClosing::tracePoseGraph(const std::string& path) const
 {
+  if (!pgo_)
+  {
+    return false;
+  }
   std::ofstream trace;
   trace.open(path);
   trace.precision(15);

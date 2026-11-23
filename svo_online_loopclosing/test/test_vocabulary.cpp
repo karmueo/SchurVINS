@@ -1,5 +1,7 @@
 #include <gtest/gtest.h>
 #include <svo/online_loopclosing/bow.h>
+#include <svo/online_loopclosing/loop_closing.h>
+#include <vikit/cameras/camera_factory.h>
 #include <cstdlib>
 #include <filesystem>
 #include <stdexcept>
@@ -55,4 +57,72 @@ TEST(LoopVocabulary, OfficialVocabularyTransformsScoresAndRetrievesRevisitedFram
   EXPECT_EQ(results[1].Id,distractor_id);
   EXPECT_GT(results[0].Score,results[1].Score);
   EXPECT_NEAR(results[0].Score,matching,1e-8);
+}
+
+class LoopLifecycle : public testing::Test
+{
+protected:
+  void SetUp() override
+  {
+    const char* resource = std::getenv("SVO_VOCABULARY");
+    if (!resource || !std::filesystem::is_regular_file(resource))
+      GTEST_SKIP() << "Set SVO_VOCABULARY to a locked official vocabulary";
+    Eigen::VectorXd intrinsics(4);
+    intrinsics << 200, 200, 160, 120;
+    camera_ = vk::cameras::factory::makePinholeCamera(intrinsics, 320, 240);
+    vk::cameras::TransformationVector extrinsics;
+    extrinsics.emplace_back(svo::Quaternion(), Eigen::Vector3d::Zero());
+    rig_ = std::make_shared<svo::CameraBundle>(
+        extrinsics, std::vector<svo::CameraPtr>{camera_}, "loop_lifecycle");
+    const std::filesystem::path vocabulary(resource);
+    options_.voc_path = vocabulary.parent_path().string();
+    options_.voc_name = vocabulary.filename().string();
+    options_.scale_ret_app = "None";
+    options_.global_map_type = "BuiltInPoseGraph";
+  }
+
+  svo::CameraPtr camera_;
+  svo::CameraBundle::Ptr rig_;
+  svo::LoopClosureOptions options_{};
+};
+
+TEST_F(LoopLifecycle, FinishingWithoutSubmittedFramesIsSafeAndRepeatable)
+{
+  svo::LoopClosing loop(options_, rig_);
+  EXPECT_TRUE(loop.lastFinished());
+  EXPECT_TRUE(loop.finishPending(0.0));
+  EXPECT_TRUE(loop.finishPending(0.1));
+  EXPECT_EQ(loop.corrections_applied_, 0u);
+  EXPECT_EQ(loop.pgo_completed_, 0u);
+}
+
+TEST_F(LoopLifecycle, DrainingSubmitsBothConsecutiveLoopConstraints)
+{
+  options_.ignored_past_frames = 4;
+  svo::LoopClosing loop(options_, rig_);
+  cv::Mat image(240, 320, CV_8UC1);
+  cv::RNG(42).fill(image, cv::RNG::UNIFORM, 0, 256);
+  std::vector<svo::FramePtr> frames;
+  for (int i = 0; i < 4; ++i)
+  {
+    auto frame = std::make_shared<svo::Frame>(camera_, image, (i + 1) * 100000000LL, 1);
+    frame->T_f_w_ = svo::Transformation(svo::Quaternion(), Eigen::Vector3d(-i, 0, 0));
+    frame->accumulated_w_T_correction_ =
+        svo::Transformation(svo::Quaternion(), Eigen::Vector3d(0.1 * i, 0, 0));
+    frames.push_back(frame);
+    loop.addFrameToPR(std::make_shared<svo::FrameBundle>(std::vector<svo::FramePtr>{frame}));
+    ASSERT_TRUE(loop.finishPending(5.0));
+  }
+
+  ASSERT_EQ(loop.kf_list_.size(), frames.size());
+  loop.cur_kf_to_lc_kf_bundle_id_map_[frames[2]->bundleId()] = frames[0]->bundleId();
+  loop.cur_kf_to_lc_kf_bundle_id_map_[frames[3]->bundleId()] = frames[0]->bundleId();
+  for (const auto& frame : frames)
+    loop.updateKeyframe(frame);
+
+  ASSERT_TRUE(loop.finishPending(5.0));
+  EXPECT_EQ(loop.pgo_completed_, 2u);
+  EXPECT_EQ(loop.pgo_->poses_->size(), frames.size());
+  EXPECT_TRUE(loop.finishPending(0.0));
+  EXPECT_EQ(loop.pgo_completed_, 2u);
 }

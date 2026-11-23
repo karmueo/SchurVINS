@@ -431,6 +431,7 @@ bool FrameHandlerBase::addFrameBundle(const FrameBundlePtr& frame_bundle)
       {
         Transformation w_T_correction;
         lc_->consumeOldestCorrection(&w_T_correction);
+        ++lc_->corrections_applied_;
         bundle_adjustment_->setCorrectionInWorld(w_T_correction);
         setRecovery(false);
       }

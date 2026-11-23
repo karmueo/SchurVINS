@@ -8,6 +8,7 @@
 #pragma once
 
 #include <thread>
+#include <atomic>
 #include <mutex>
 #include <memory>
 #include <deque>
@@ -50,7 +51,7 @@ public:
   bool searchKfIdInQueue(int id);
   bool traceTimingData(std::string path);
   ceres::MapOfPoses* poses_;
-  bool has_updated_result_;
+  std::atomic_bool has_updated_result_{false};
   std::vector<ceres::ResidualBlockId> seq_constraint_ids_;
   std::deque<int> ignore_seq_constraint_kfs_;
 

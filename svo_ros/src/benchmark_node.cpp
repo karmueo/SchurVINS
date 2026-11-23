@@ -487,19 +487,8 @@ void BenchmarkNode::runBenchmark(const std::string& dataset_dir)
 
 #ifdef SVO_LOOP_CLOSING
   /// Trace loop closing results
-  if (svo_->lc_)
+  if (svo_->lc_ && svo_->lc_->finishPending(5.0))
   {
-    vk::Timer timer;
-    timer.start();
-    while (!svo_->lc_->lastFinished())
-    {
-      timer.stop();
-      if (timer.getAccumulated() > 5.0)
-      {
-        break;
-      }
-      timer.resume();
-    }
     std::string trace_pg_name;
     trace_pg_name =
         svo_->options_.trace_dir + "/" + kSavePg + suffix + "." + kExt;
@@ -518,6 +507,10 @@ void BenchmarkNode::runBenchmark(const std::string& dataset_dir)
     svo_->lc_->traceTimingData(lc_timing_path);
     svo_->lc_->traceNumQueryData(numquery_path);
     svo_->lc_->traceClosedLoops(svo_->options_.trace_dir, suffix);
+  }
+  else if (svo_->lc_)
+  {
+    std::cerr << "Loop/PGO tasks did not finish within 5 seconds.\n";
   }
 #endif
 

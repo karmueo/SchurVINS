@@ -13,6 +13,9 @@
 #pragma once
 
 #include <thread>
+#include <future>
+#include <atomic>
+#include <chrono>
 #include <mutex>
 #include <memory>
 #include <map>
@@ -370,10 +373,27 @@ public:
 
   inline bool lastFinished() const
   {
-    return completed_flags_.back();
+    return !pr_future_.valid() || pr_future_.wait_for(std::chrono::seconds(0)) == std::future_status::ready;
   }
 
+public:
+  bool finishPending(double timeout_seconds);
+  size_t corrections_applied_ = 0;
+  size_t pgo_completed_ = 0;
+
 private:
+  struct PendingPoseGraphFrame
+  {
+    size_t keyframe_index;
+    Transformation uncorrected_pose;
+    Transformation corrected_pose;
+  };
+
+  std::future<void> pr_future_;
+  std::future<void> pgo_future_;
+  std::deque<PendingPoseGraphFrame> pending_pose_graph_frames_;
+
+  void advancePoseGraph();
   void extractAndConvert(
       const svo::FramePtr& frame, double* current_frame_time_sec,
       Transformation* Twc, std::vector<cv::Point2f>* current_frame_SVOkeypoints,
@@ -414,7 +434,7 @@ private:
   LCScaleRetMethod scale_retrieval_approach_;
 
   /* Vector for thread management */
-  std::vector<bool> completed_flags_;
+  std::vector<std::shared_ptr<std::atomic_bool>> completed_flags_;
 
   /* Proximity distance threshold for detecting close loop closure candidates */
   double prox_dist_thresh_ = 0;
